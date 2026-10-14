@@ -319,6 +319,8 @@ pub struct LampState {
     pub source: &'static str,
     /// Last problem, if any.
     pub last_error: Option<String>,
+    /// Frames waiting to be written. Zero with `link == "ready"` means the lamp has everything.
+    pub pending: usize,
     /// What the lamp can do.
     pub caps: CapsView,
 }
@@ -748,6 +750,7 @@ impl Core {
                     active: l.look.active.clone(),
                     source: l.source(now),
                     last_error: l.last_error.clone(),
+                    pending: l.pending(),
                     caps: CapsView {
                         color: l.caps.color.is_some(),
                         brightness: l.caps.brightness.is_some() || l.caps.color.is_some(),

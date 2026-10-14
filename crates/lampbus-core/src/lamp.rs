@@ -128,6 +128,10 @@ impl Lamp {
         self.look.on && self.look.anim.is_some()
     }
 
+    pub(crate) fn pending(&self) -> usize {
+        self.queue.len() + self.raw.len()
+    }
+
     fn nothing_queued(&self) -> bool {
         self.queue.is_empty() && self.raw.is_empty()
     }

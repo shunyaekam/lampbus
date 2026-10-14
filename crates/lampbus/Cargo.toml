@@ -1,0 +1,30 @@
+[package]
+name = "lampbus"
+version = "0.0.1"
+description = "Control Bluetooth lamps from the command line, an HTTP API, or an MCP server (for agents)"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[features]
+default = ["http", "mcp"]
+# HTTP + WebSocket API (`lampbus serve`)
+http = ["dep:axum"]
+# MCP server over stdio (`lampbus mcp`)
+mcp = []
+
+[dependencies]
+lampbus-core = { path = "../lampbus-core" }
+lampbus-defs = { path = "../lampbus-defs" }
+lampbus-render = { path = "../lampbus-render" }
+lampbus-shell = { path = "../lampbus-shell" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", default-features = false, features = ["rt", "macros", "time", "sync", "net", "io-util", "io-std", "signal"] }
+getrandom = "0.4"
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio", "json", "ws", "query"], optional = true }
+
+[lints]
+workspace = true

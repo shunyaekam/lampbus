@@ -9,9 +9,16 @@ env:
 
 jobs:
   core:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: BlueZ build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -23,3 +30,7 @@ jobs:
         run: cargo run -q -p lampbus-oracles -- --check
       - name: Without the aes feature
         run: cargo test -p lampbus-defs --no-default-features --lib
+      - name: Builds without the optional adapters
+        run: cargo build -p lampbus --no-default-features
+      - name: Release build
+        run: cargo build --release -p lampbus

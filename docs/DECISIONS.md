@@ -35,10 +35,17 @@ Short, dated, with the reason. A decision can be reversed; write a new entry ins
   under test by being separate hand-written implementations, not by being written in another language.
 - **D14. Public.** The founder decided on 2026-10-14 to publish the repository (supersedes D8). Nothing is announced
   or sent to other projects without a separate decision.
+- **D15. One control language, many front ends.** The CLI, HTTP API and MCP server all speak one strict JSON object
+  ([spec/control-language.md](../spec/control-language.md)), so behaviour cannot drift between them and agent mistakes are
+  reported, not guessed at. Unknown fields are errors.
+- **D16. Agents need no daemon.** `lampbus mcp` talks to Bluetooth directly for the life of the session. The HTTP daemon
+  exists for always-on use (animations that outlive a command, live streams, a phone or home hub), and the CLI uses it
+  automatically when it is running.
+- **D17. Defaults come from the simulator, not guesses.** Behaviour that is easy to get subtly wrong (idle drop,
+  backoff, newest-state-wins, holding the last frame of an animation) is pinned by deterministic simulation tests.
 
 ## Open
 
-- Core API shape (event/action interface): next. The definition-format spec is drafted (D11).
 - Matter spike on `rs-matter`: commission a color light to Apple Home, check hue/saturation/brightness.
 - Agent surface (MCP): depends on how the target agents call tools.
 - Whether one repository holds everything or the spec gets its own.
