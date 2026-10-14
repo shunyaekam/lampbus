@@ -1,0 +1,29 @@
+{
+  "schema": "lampbus.device/0",
+  "id": "govee-h61",
+  "name": "Govee H61xx-style BLE lights (20-byte XOR frames)",
+  "status": "source-verified",
+  "match": { "name_prefix": ["ihoment_", "Govee_"] },
+  "gatt": {
+    "service": "00010203-0405-0607-0809-0a0b0c0d1910",
+    "write": "00010203-0405-0607-0809-0a0b0c0d2b11",
+    "mode": "without-response"
+  },
+  "roles": { "on": "power_on", "off": "power_off", "color_rgb": "color", "brightness": "brightness" },
+  "commands": {
+    "power_on":  { "frame": ["0x33", "0x01", 1],  "pad_to": 19, "checksum": {"kind": "xor"} },
+    "power_off": { "frame": ["0x33", "0x01", 0],  "pad_to": 19, "checksum": {"kind": "xor"} },
+    "brightness": {
+      "params": { "level": {"min": 0, "max": 255} },
+      "frame": ["0x33", "0x04", "$level"], "pad_to": 19, "checksum": {"kind": "xor"}
+    },
+    "color": {
+      "params": { "r": {}, "g": {}, "b": {} },
+      "frame": ["0x33", "0x05", "0x02", "$r", "$g", "$b"], "pad_to": 19, "checksum": {"kind": "xor"}
+    }
+  },
+  "sources": [
+    "https://github.com/Beshelmek/govee_ble_lights (custom_components/govee-ble-lights/light.py)",
+    "https://github.com/egold555/Govee-Reverse-Engineering (UUIDs, per-model notes)"
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "schema": "lampbus.device/0",
+  "id": "elk-bledom",
+  "name": "ELK-BLEDOM RGB controllers",
+  "status": "source-verified",
+  "match": { "name_prefix": ["ELK-BLEDOM"] },
+  "gatt": {
+    "service": "0000fff0-0000-1000-8000-00805f9b34fb",
+    "write": "0000fff3-0000-1000-8000-00805f9b34fb",
+    "mode": "without-response"
+  },
+  "roles": { "on": "power_on", "off": "power_off", "color_rgb": "color", "brightness": "brightness" },
+  "commands": {
+    "power_on":  { "frame": ["0x7e", 0, 4, "0xf0", 0, 1, "0xff", 0, "0xef"] },
+    "power_off": { "frame": ["0x7e", 0, 4, 0, 0, 0, "0xff", 0, "0xef"] },
+    "color": {
+      "params": { "r": {}, "g": {}, "b": {} },
+      "frame": ["0x7e", 0, 5, 3, "$r", "$g", "$b", 0, "0xef"]
+    },
+    "brightness": {
+      "params": { "level": {"min": 0, "max": 100} },
+      "frame": ["0x7e", 0, 1, "$level", 0, 0, 0, 0, "0xef"]
+    }
+  },
+  "sources": [
+    "https://github.com/FergusInLondon/ELK-BLEDOM (PROTCOL.md, device/commands.go)",
+    "https://github.com/TheSylex/ELK-BLEDOM-bluetooth-led-strip-controller (src/device.rs)"
+  ]
+}

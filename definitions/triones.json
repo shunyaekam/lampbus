@@ -1,0 +1,25 @@
+{
+  "schema": "lampbus.device/0",
+  "id": "triones",
+  "name": "Triones / HappyLighting-style RGB controllers",
+  "status": "source-verified",
+  "match": { "name_prefix": ["Triones:"] },
+  "gatt": {
+    "service": "0000ffd5-0000-1000-8000-00805f9b34fb",
+    "write": "0000ffd9-0000-1000-8000-00805f9b34fb",
+    "mode": "without-response"
+  },
+  "roles": { "on": "power_on", "off": "power_off", "color_rgb": "color" },
+  "commands": {
+    "power_on":  { "frame": ["0xcc", "0x23", "0x33"] },
+    "power_off": { "frame": ["0xcc", "0x24", "0x33"] },
+    "color": {
+      "params": { "r": {}, "g": {}, "b": {} },
+      "frame": ["0x56", "$r", "$g", "$b", 0, "0xf0", "0xaa"]
+    }
+  },
+  "sources": [
+    "https://github.com/lightinglibs/flux_led (flux_led/protocol.py, original-protocol frames)",
+    "https://github.com/Bluetooth-Devices/led-ble (const.py: characteristic UUID list)"
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "schema": "lampbus.device/0",
+  "id": "istrip-ssl",
+  "name": "iStrip+ lamps (SSL-xxxxxx)",
+  "status": "hardware-verified",
+  "match": { "name_prefix": ["SSL-"], "service_uuids": ["0000af30-0000-1000-8000-00805f9b34fb"] },
+  "gatt": {
+    "service": "0000ac50-1212-efde-1523-785fedbeda25",
+    "write": "0000ac52-1212-efde-1523-785fedbeda25",
+    "mode": "without-response"
+  },
+  "roles": { "off": "off", "color_rgb": "color", "brightness": "brightness", "effect": "effect", "effect_speed": "speed" },
+  "effects": [
+    {"id": 1, "name": "Fade7"}, {"id": 2, "name": "Fade3"}, {"id": 3, "name": "Breath R"}, {"id": 4, "name": "Strobe R"},
+    {"id": 5, "name": "Breath7"}, {"id": 6, "name": "Breath3"}, {"id": 7, "name": "Breath B"}, {"id": 8, "name": "Strobe B"},
+    {"id": 9, "name": "Flash7"}, {"id": 10, "name": "Flash3"}, {"id": 11, "name": "Breath G"}, {"id": 12, "name": "Strobe G"}
+  ],
+  "commands": {
+    "color": {
+      "params": { "group": {"min": 0, "max": 255, "default": 1}, "r": {}, "g": {}, "b": {},
+                  "brightness": {"min": 0, "max": 100, "default": 100}, "speed": {"min": 1, "max": 100, "default": 100} },
+      "frame": [84, 82, 0, 87, 2, "$group", 0, "$r", "$g", "$b", "$brightness", "$speed", 0],
+      "pad_to": 16
+    },
+    "off": {
+      "params": { "group": {"min": 0, "max": 255, "default": 1},
+                  "brightness": {"min": 0, "max": 100, "default": 100}, "speed": {"min": 1, "max": 100, "default": 100} },
+      "frame": [84, 82, 0, 87, 2, "$group", 0, 0, 0, 0, "$brightness", "$speed", 0],
+      "pad_to": 16
+    },
+    "effect": {
+      "params": { "group": {"min": 0, "max": 255, "default": 1}, "mode": {"min": 1, "max": 12},
+                  "brightness": {"min": 0, "max": 100, "default": 100}, "speed": {"min": 1, "max": 100, "default": 100} },
+      "frame": [84, 82, 0, 87, 2, "$group", "$mode", 0, 0, 0, "$brightness", "$speed", 0],
+      "pad_to": 16
+    },
+    "brightness": {
+      "params": { "group": {"min": 0, "max": 255, "default": 1}, "level": {"min": 0, "max": 100} },
+      "frame": [84, 82, 0, 87, 7, "$group", "$level"],
+      "pad_to": 16
+    },
+    "speed": {
+      "params": { "group": {"min": 0, "max": 255, "default": 1}, "value": {"min": 1, "max": 100} },
+      "frame": [84, 82, 0, 87, 6, "$group", "$value"],
+      "pad_to": 16
+    }
+  },
+  "wire": [ { "op": "aes-128-ecb", "key": "34522a5b7a6e492c08090a9d8d2a23f8" } ],
+  "sources": [
+    "decoded from the vendor Android app v1.4.3 and verified on an SSL-E089ED lamp",
+    "https://github.com/vakintosh/istrip_plus_HA (docs/ble-protocol.md)",
+    "https://github.com/gsp8181/ha-istrip-lamp-esphome (ISTRIP_PROTOCOL.md)"
+  ]
+}

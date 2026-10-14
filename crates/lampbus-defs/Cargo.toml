@@ -1,0 +1,22 @@
+[package]
+name = "lampbus-defs"
+version = "0.0.1"
+description = "Data-driven Bluetooth lamp definitions: parse, validate, and encode commands to bytes"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[features]
+default = ["aes"]
+# AES-128-ECB wire transform (needed by e.g. iStrip lamps). Disable for lamps that don't need it.
+aes = ["dep:aes"]
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+aes = { version = "0.9", optional = true }
+
+[lints]
+workspace = true

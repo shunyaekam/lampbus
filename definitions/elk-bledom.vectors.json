@@ -1,0 +1,94 @@
+[
+ {
+  "command": "power_on",
+  "args": {},
+  "plain": "7e0004f00001ff00ef"
+ },
+ {
+  "command": "power_off",
+  "args": {},
+  "plain": "7e0004000000ff00ef"
+ },
+ {
+  "command": "color",
+  "args": {
+   "r": 0,
+   "g": 0,
+   "b": 0
+  },
+  "plain": "7e00050300000000ef"
+ },
+ {
+  "command": "color",
+  "args": {
+   "r": 255,
+   "g": 255,
+   "b": 255
+  },
+  "plain": "7e000503ffffff00ef"
+ },
+ {
+  "command": "color",
+  "args": {
+   "r": 255,
+   "g": 0,
+   "b": 128
+  },
+  "plain": "7e000503ff008000ef"
+ },
+ {
+  "command": "color",
+  "args": {
+   "r": 1,
+   "g": 2,
+   "b": 3
+  },
+  "plain": "7e00050301020300ef"
+ },
+ {
+  "command": "color",
+  "args": {
+   "r": 18,
+   "g": 52,
+   "b": 86
+  },
+  "plain": "7e00050312345600ef"
+ },
+ {
+  "command": "color",
+  "args": {
+   "r": 255,
+   "g": 147,
+   "b": 41
+  },
+  "plain": "7e000503ff932900ef"
+ },
+ {
+  "command": "brightness",
+  "args": {
+   "level": 0
+  },
+  "plain": "7e00010000000000ef"
+ },
+ {
+  "command": "brightness",
+  "args": {
+   "level": 1
+  },
+  "plain": "7e00010100000000ef"
+ },
+ {
+  "command": "brightness",
+  "args": {
+   "level": 50
+  },
+  "plain": "7e00013200000000ef"
+ },
+ {
+  "command": "brightness",
+  "args": {
+   "level": 100
+  },
+  "plain": "7e00016400000000ef"
+ }
+]

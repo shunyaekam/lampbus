@@ -1,0 +1,200 @@
+[
+ {
+  "command": "color",
+  "args": {
+   "r": 0,
+   "g": 0,
+   "b": 0
+  },
+  "plain": "54520057020100000000646400000000",
+  "wire": "7f77944a5498752f8929a2e435c4be8d"
+ },
+ {
+  "command": "color",
+  "args": {
+   "r": 255,
+   "g": 255,
+   "b": 255
+  },
+  "plain": "54520057020100ffffff646400000000",
+  "wire": "d214f38c2841781063646d96822d989b"
+ },
+ {
+  "command": "color",
+  "args": {
+   "r": 255,
+   "g": 0,
+   "b": 128
+  },
+  "plain": "54520057020100ff0080646400000000",
+  "wire": "bb39be45765e7c06308f0c7533971b3f"
+ },
+ {
+  "command": "color",
+  "args": {
+   "r": 1,
+   "g": 2,
+   "b": 3
+  },
+  "plain": "54520057020100010203646400000000",
+  "wire": "731f954e7c099992d038a02d35e8546f"
+ },
+ {
+  "command": "color",
+  "args": {
+   "r": 18,
+   "g": 52,
+   "b": 86
+  },
+  "plain": "54520057020100123456646400000000",
+  "wire": "4f5d70b64214dcc31711058d09607600"
+ },
+ {
+  "command": "color",
+  "args": {
+   "r": 255,
+   "g": 147,
+   "b": 41
+  },
+  "plain": "54520057020100ff9329646400000000",
+  "wire": "7c367f5d7aea815e35c03ad7d77106e3"
+ },
+ {
+  "command": "color",
+  "args": {
+   "r": 255,
+   "g": 0,
+   "b": 0,
+   "brightness": 30,
+   "speed": 50
+  },
+  "plain": "54520057020100ff00001e3200000000",
+  "wire": "42992381103149de36c1fb8368204d6e"
+ },
+ {
+  "command": "color",
+  "args": {
+   "r": 9,
+   "g": 8,
+   "b": 7,
+   "brightness": 0,
+   "speed": 1,
+   "group": 3
+  },
+  "plain": "54520057020300090807000100000000",
+  "wire": "7423b5ff321ba3a1f432221ed49a73cb"
+ },
+ {
+  "command": "off",
+  "args": {},
+  "plain": "54520057020100000000646400000000",
+  "wire": "7f77944a5498752f8929a2e435c4be8d"
+ },
+ {
+  "command": "off",
+  "args": {
+   "brightness": 40,
+   "speed": 20
+  },
+  "plain": "54520057020100000000281400000000",
+  "wire": "7366e86fbcaa8cd7ed5354f5f858559d"
+ },
+ {
+  "command": "effect",
+  "args": {
+   "mode": 1
+  },
+  "plain": "54520057020101000000646400000000",
+  "wire": "d69d7e97e04c353539d3683fb216f50b"
+ },
+ {
+  "command": "effect",
+  "args": {
+   "mode": 5
+  },
+  "plain": "54520057020105000000646400000000",
+  "wire": "6df911043606b7e98745fb146d6ba530"
+ },
+ {
+  "command": "effect",
+  "args": {
+   "mode": 9
+  },
+  "plain": "54520057020109000000646400000000",
+  "wire": "c59f2b92456b71c045e4faf00dfe4a94"
+ },
+ {
+  "command": "effect",
+  "args": {
+   "mode": 12
+  },
+  "plain": "5452005702010c000000646400000000",
+  "wire": "88e045a542c17822cda53db4675f5149"
+ },
+ {
+  "command": "effect",
+  "args": {
+   "mode": 3,
+   "brightness": 60,
+   "speed": 10
+  },
+  "plain": "545200570201030000003c0a00000000",
+  "wire": "b924279dff02d94b4c22a515123d7f87"
+ },
+ {
+  "command": "brightness",
+  "args": {
+   "level": 0
+  },
+  "plain": "54520057070100000000000000000000",
+  "wire": "2f57626425395bf9082064f538576e71"
+ },
+ {
+  "command": "brightness",
+  "args": {
+   "level": 1
+  },
+  "plain": "54520057070101000000000000000000",
+  "wire": "8b22297a93d0fd1e7eaf133c8ef0b825"
+ },
+ {
+  "command": "brightness",
+  "args": {
+   "level": 50
+  },
+  "plain": "54520057070132000000000000000000",
+  "wire": "d4914856960e6f088828210fda8de563"
+ },
+ {
+  "command": "brightness",
+  "args": {
+   "level": 100
+  },
+  "plain": "54520057070164000000000000000000",
+  "wire": "378a01fc0d5ed17b0b9dd55d574ffd15"
+ },
+ {
+  "command": "speed",
+  "args": {
+   "value": 1
+  },
+  "plain": "54520057060101000000000000000000",
+  "wire": "3ab27541d822d26a6ad2dddfe73fdfc4"
+ },
+ {
+  "command": "speed",
+  "args": {
+   "value": 30
+  },
+  "plain": "5452005706011e000000000000000000",
+  "wire": "dea51bc5ad29ff63a204c2e7acf95a1d"
+ },
+ {
+  "command": "speed",
+  "args": {
+   "value": 100
+  },
+  "plain": "54520057060164000000000000000000",
+  "wire": "9f8b1c046099b12b3d53878020f15e79"
+ }
+]
