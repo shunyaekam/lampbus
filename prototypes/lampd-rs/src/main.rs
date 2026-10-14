@@ -1,6 +1,6 @@
 //! lampd (Rust): lightweight controller service for iStrip BLE lamps.
 //!
-//! Environment (all optional, same names as the Python build):
+//! Environment (all optional):
 //!   LAMPD_NAME     BLE name of the lamp                  (SSL-E089ED)
 //!   LAMPD_BIND     address for the HTTP API              (127.0.0.1; use `tailscale serve` to expose it)
 //!   LAMPD_PORT     HTTP port                             (8787)

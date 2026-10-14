@@ -99,7 +99,7 @@ More roles will be added as more lamps are described; roles a host does not know
 
 `plain` is the frame before `wire` transforms; `wire` is what is written and may be omitted when it equals `plain`.
 **Vectors must come from an independent source** (another project's code, a capture from the real device, or the
-vendor's own app), never from the interpreter under test. `tools/gen_vectors.py` shows the pattern: each oracle
+vendor's own app), never from the interpreter under test. `tools/oracles` shows the pattern: each oracle
 re-implements the upstream frame construction literally.
 
 ## Adding a lamp

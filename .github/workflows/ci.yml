@@ -19,5 +19,7 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --workspace --all-targets -- -D warnings
       - run: cargo test --workspace
+      - name: Conformance vectors are up to date
+        run: cargo run -q -p lampbus-oracles -- --check
       - name: Without the aes feature
         run: cargo test -p lampbus-defs --no-default-features --lib

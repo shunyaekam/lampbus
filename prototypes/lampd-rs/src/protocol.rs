@@ -170,7 +170,7 @@ mod tests {
         f
     }
 
-    /// (name, plaintext, ciphertext) produced by the Python implementation that drives the real lamp.
+    /// (name, plaintext, ciphertext) produced by the earlier implementation that was verified on a real lamp.
     const GOLDEN: [(&str, &str, &str); 7] = [
         ("red100", "54520057020100ff0000646400000000", "1273622a87797e5c768211ee59308e5b"),
         ("off", "54520057020100000000646400000000", "7f77944a5498752f8929a2e435c4be8d"),
@@ -182,7 +182,7 @@ mod tests {
     ];
 
     #[test]
-    fn frames_and_encryption_match_python() {
+    fn frames_and_encryption_match_reference_vectors() {
         let built: [(&str, Frame); 7] = [
             ("red100", color(255., 0., 0., 100., 100., 0, 0)),
             ("off", off()),

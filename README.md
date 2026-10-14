@@ -32,10 +32,10 @@ ESPHome). See [docs/research](docs/research/landscape-2026-10-14.md) for what we
 | `spec/` | the lamp definition format (draft) |
 | `definitions/` | lamp definitions as data, each with conformance vectors: iStrip, ELK-BLEDOM, Triones, Govee H61xx |
 | `crates/lampbus-defs/` | Rust crate: parse, validate and encode definitions (`unsafe` forbidden, 10 tests, 54 vectors) |
-| `tools/` | vector generator (independent oracles), size measurement |
+| `tools/oracles/` | Rust tool that generates the conformance vectors from independent oracles (`--check` in CI) |
+| `tools/measure_size.sh` | release-size measurement used by the scorecard |
 | `docs/` | scorecard, decisions, research |
-| `prototypes/python/` | first working prototype: service, HomeKit bridge, API, CLI |
-| `prototypes/lampd-rs/` | Rust port of the prototype (1.1 MB release binary), the seed of the future core |
+| `prototypes/lampd-rs/` | working daemon prototype in Rust (HTTP API, animations; drives one real lamp). Seed of the future core; not part of the workspace |
 | `library/` | example animations and presets (JSON) |
 
 ## Compatibility and legal

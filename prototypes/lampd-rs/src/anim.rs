@@ -1,7 +1,7 @@
 //! Declarative animations: validated JSON in, (rgb, intensity) per timestamp out.
 //! No code from an animation file is ever executed, so an agent can author them safely.
 //!
-//! Same spec as the Python build (see library/animations/*.json for examples):
+//! Spec (see library/animations/*.json for examples):
 //!   keyframes: {"type":"keyframes","duration":s,"loop":bool,"space":"rgb"|"hsv","then":"hold"|"off",
 //!               "keys":[{"t":s,"color":..,"level":0-100,"ease":"linear"|"smooth"|"hold"}]}
 //!   generator: {"type":"gen","gen":"rainbow"|"breathe"|"candle"|"aurora","params":{..},"duration":s?}

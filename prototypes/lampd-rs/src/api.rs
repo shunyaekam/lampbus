@@ -1,5 +1,5 @@
 //! HTTP + WebSocket API. JSON in/out, Bearer-token auth (header or ?token=).
-//! Same routes and payloads as the Python build, so lampctl and any client work with either.
+//! Plain JSON over HTTP, so any HTTP client works (curl included).
 
 use crate::engine::{Cmd, Error, Handle};
 use crate::library::Kind;

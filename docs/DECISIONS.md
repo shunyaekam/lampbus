@@ -30,6 +30,12 @@ Short, dated, with the reason. A decision can be reversed; write a new entry ins
   [spec/definition-format.md](../spec/definition-format.md).
 - **D12. Vectors must come from independent oracles**, never from the interpreter under test.
 
+- **D13. One language in the repository: Rust.** The first prototype was written in Python; it was removed once the
+  oracles and the daemon existed in Rust (it remains in git history). Vector oracles stay independent of the code
+  under test by being separate hand-written implementations, not by being written in another language.
+- **D14. Public.** The founder decided on 2026-10-14 to publish the repository (supersedes D8). Nothing is announced
+  or sent to other projects without a separate decision.
+
 ## Open
 
 - Core API shape (event/action interface): next. The definition-format spec is drafted (D11).

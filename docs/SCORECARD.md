@@ -7,10 +7,10 @@ and the current baseline from the prototypes. Anything marked *unmeasured* is a 
 |---|---|---|---|---|
 | 1 | Core code size | model + definitions interpreter + renderer under ~100 KB of code on a Cortex-M (`thumbv7em`) | `tools/measure_size.sh` (delta over a std baseline); `cargo size` on a MCU target once the core is `no_std` | definitions core (parse + encode + AES + `serde_json`), std build: **116 KB** delta over a bare std program (2026-10-14, macOS arm64). MCU build *unmeasured* (needs `no_std`). Renderer not yet ported. |
 | 2 | Daemon binary | stripped release binary under 500 KB excluding platform Bluetooth frameworks | `ls -l` on the release binary | prototype 1.10 MB, includes an HTTP+WebSocket API |
-| 3 | Idle memory | under a few MB beyond the platform's Bluetooth libraries | RSS after 5 min idle | Rust prototype 9 MB idle, 12 MB after a test run on macOS (includes Apple frameworks); Python prototype 32-50 MB with HomeKit |
+| 3 | Idle memory | under a few MB beyond the platform's Bluetooth libraries | RSS after 5 min idle | Rust prototype 9 MB idle, 12 MB after a test run on macOS (includes Apple frameworks); an earlier Python prototype (since removed, see git history) used 32-50 MB with HomeKit |
 | 4 | CPU | 0% idle, under 1% while streaming 40 updates/s | `ps` / `time` over a fixed scenario | Rust prototype 0.25 s CPU over ~60 s of animations on macOS |
 | 5 | Latency | command to Bluetooth write under 5 ms in-process | timestamps in the test harness | *unmeasured* |
-| 6 | Cold connect | first command reaches the lamp quickly | wall time from command to first write, cold and warm | Rust prototype ~14 s cold, Python ~7 s cold (scan-bound, to be improved) |
+| 6 | Cold connect | first command reaches the lamp quickly | wall time from command to first write, cold and warm | Rust prototype ~14 s cold, earlier Python prototype ~7 s cold (scan-bound, to be improved) |
 | 7 | Dependencies | tiny audited tree; core model has none | `cargo tree`, `cargo-deny` clean | `lampbus-defs`: 23 crates with AES, 13 without (several are compile-time only: `syn`, `quote`, `serde_derive`). `cargo-deny` not yet wired. |
 | 8 | Safety | `#![forbid(unsafe_code)]` in core crates, no `unwrap` outside tests, strict clippy | CI | **met for `lampbus-defs`**: `unsafe_code` forbidden, `unwrap`/`expect`/`panic` denied, clippy `-D warnings` clean. Prototypes are not held to this. |
 | 9 | Portability | one CI matrix builds Linux, macOS, iOS, Android, `wasm32`, Cortex-M | CI | *unmeasured* |

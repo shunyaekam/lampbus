@@ -1,6 +1,6 @@
 //! Conformance: every definition in `definitions/` must reproduce its independent vectors byte for byte.
 //!
-//! The vectors come from `tools/gen_vectors.py`, whose oracles re-implement the upstream projects' frame building
+//! The vectors come from `tools/oracles`, whose oracles re-implement the upstream projects' frame building
 //! (or, for the iStrip lamp, the hardware-verified prototype) with no shared code. A pass here means one small
 //! interpreter, driven only by data, reproduces every family.
 

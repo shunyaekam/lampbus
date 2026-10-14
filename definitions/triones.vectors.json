@@ -1,66 +1,66 @@
 [
- {
-  "command": "power_on",
-  "args": {},
-  "plain": "cc2333"
- },
- {
-  "command": "power_off",
-  "args": {},
-  "plain": "cc2433"
- },
- {
-  "command": "color",
-  "args": {
-   "r": 0,
-   "g": 0,
-   "b": 0
+  {
+    "command": "power_on",
+    "args": {},
+    "plain": "cc2333"
   },
-  "plain": "5600000000f0aa"
- },
- {
-  "command": "color",
-  "args": {
-   "r": 255,
-   "g": 255,
-   "b": 255
+  {
+    "command": "power_off",
+    "args": {},
+    "plain": "cc2433"
   },
-  "plain": "56ffffff00f0aa"
- },
- {
-  "command": "color",
-  "args": {
-   "r": 255,
-   "g": 0,
-   "b": 128
+  {
+    "command": "color",
+    "args": {
+      "r": 0,
+      "g": 0,
+      "b": 0
+    },
+    "plain": "5600000000f0aa"
   },
-  "plain": "56ff008000f0aa"
- },
- {
-  "command": "color",
-  "args": {
-   "r": 1,
-   "g": 2,
-   "b": 3
+  {
+    "command": "color",
+    "args": {
+      "r": 255,
+      "g": 255,
+      "b": 255
+    },
+    "plain": "56ffffff00f0aa"
   },
-  "plain": "5601020300f0aa"
- },
- {
-  "command": "color",
-  "args": {
-   "r": 18,
-   "g": 52,
-   "b": 86
+  {
+    "command": "color",
+    "args": {
+      "r": 255,
+      "g": 0,
+      "b": 128
+    },
+    "plain": "56ff008000f0aa"
   },
-  "plain": "5612345600f0aa"
- },
- {
-  "command": "color",
-  "args": {
-   "r": 255,
-   "g": 147,
-   "b": 41
+  {
+    "command": "color",
+    "args": {
+      "r": 1,
+      "g": 2,
+      "b": 3
+    },
+    "plain": "5601020300f0aa"
   },
-  "plain": "56ff932900f0aa"
- }
+  {
+    "command": "color",
+    "args": {
+      "r": 18,
+      "g": 52,
+      "b": 86
+    },
+    "plain": "5612345600f0aa"
+  },
+  {
+    "command": "color",
+    "args": {
+      "r": 255,
+      "g": 147,
+      "b": 41
+    },
+    "plain": "56ff932900f0aa"
+  }
 ]

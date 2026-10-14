@@ -1,5 +1,5 @@
 //! Presets and animations as plain JSON files (git-friendly, hand- or agent-editable).
-//! Same on-disk layout as the Python build: <root>/animations/*.json and <root>/presets/*.json.
+//! On-disk layout: <root>/animations/*.json and <root>/presets/*.json.
 
 use crate::anim;
 use serde_json::{Map, Value};

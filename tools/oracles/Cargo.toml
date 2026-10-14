@@ -1,0 +1,17 @@
+[package]
+name = "lampbus-oracles"
+version = "0.0.1"
+description = "Independent oracles that generate conformance vectors for lamp definitions"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+# Deliberately does NOT depend on lampbus-defs: the vectors must not come from the code under test.
+[dependencies]
+aes = "0.9"
+serde_json = { version = "1", features = ["preserve_order"] }
+
+[lints]
+workspace = true
