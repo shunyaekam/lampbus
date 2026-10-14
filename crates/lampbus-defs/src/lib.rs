@@ -301,6 +301,63 @@ pub struct Definition {
     pub sources: Vec<String>,
 }
 
+/// An inclusive numeric range of a command parameter.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Range {
+    /// Smallest accepted value.
+    pub min: f64,
+    /// Largest accepted value.
+    pub max: f64,
+}
+
+/// How a lamp takes a colour.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ColorCaps {
+    /// Command taking `r`, `g`, `b`.
+    pub command: String,
+    /// Range of the command's inline `brightness` parameter, if it has one.
+    pub brightness: Option<Range>,
+}
+
+/// A command with one numeric parameter (`level` for brightness, `value` for effect speed).
+#[derive(Debug, Clone, PartialEq)]
+pub struct ScalarCaps {
+    /// The command.
+    pub command: String,
+    /// Range of its parameter.
+    pub range: Range,
+}
+
+/// How a lamp runs its built-in effects.
+#[derive(Debug, Clone, PartialEq)]
+pub struct EffectCaps {
+    /// Command taking `mode`.
+    pub command: String,
+    /// Range of `mode`.
+    pub mode: Range,
+    /// Range of the inline `speed` parameter, if any.
+    pub speed: Option<Range>,
+    /// Range of the inline `brightness` parameter, if any.
+    pub brightness: Option<Range>,
+}
+
+/// What a lamp can do, derived from its `roles`. See the "Roles" section of the format spec.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Caps {
+    /// Command that powers the lamp on (no arguments).
+    pub on: Option<String>,
+    /// Command that powers the lamp off (no arguments).
+    pub off: Option<String>,
+    /// Colour control.
+    pub color: Option<ColorCaps>,
+    /// Separate brightness control (parameter `level`).
+    pub brightness: Option<ScalarCaps>,
+    /// Built-in effects.
+    pub effect: Option<EffectCaps>,
+    /// Separate effect-speed control (parameter `value`).
+    pub effect_speed: Option<ScalarCaps>,
+}
+
 /// A conformance vector: the exact bytes a command must produce for given arguments.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -421,8 +478,32 @@ impl Definition {
             self.validate_command(name, cmd)?;
         }
         for (role, cmd) in &self.roles {
-            if !self.commands.contains_key(cmd) {
+            let Some(c) = self.commands.get(cmd) else {
                 return invalid(format!("role {role:?} points at unknown command {cmd:?}"));
+            };
+            let needs: &[&str] = match role.as_str() {
+                "color_rgb" => &["r", "g", "b"],
+                "brightness" => &["level"],
+                "effect" => &["mode"],
+                "effect_speed" => &["value"],
+                _ => &[],
+            };
+            for p in needs {
+                if !encode::uses_param(c, p) {
+                    return invalid(format!(
+                        "role {role:?}: command {cmd:?} must use parameter {p:?}"
+                    ));
+                }
+            }
+            if matches!(role.as_str(), "on" | "off") {
+                let all_defaulted = c.params.values().all(|p| p.default.is_some());
+                let undeclared = c
+                    .frame
+                    .iter()
+                    .any(|e| matches!(e, Elem::Param(n) if !c.params.contains_key(n)));
+                if !all_defaulted || undeclared {
+                    return invalid(format!("role {role:?}: command {cmd:?} must work with no arguments (give every parameter a default)"));
+                }
             }
         }
         let mut ids: Vec<u8> = self.effects.iter().map(|e| e.id).collect();
@@ -511,6 +592,48 @@ impl Definition {
     /// The command that implements a standard role, if the definition declares one.
     pub fn role(&self, role: &str) -> Option<&str> {
         self.roles.get(role).map(String::as_str)
+    }
+
+    fn range_of(&self, command: &str, param: &str) -> Option<Range> {
+        let c = self.commands.get(command)?;
+        if !encode::uses_param(c, param) {
+            return None;
+        }
+        let p = c.params.get(param).cloned().unwrap_or_default();
+        Some(Range {
+            min: p.min,
+            max: p.max,
+        })
+    }
+
+    /// Summarise what this lamp can do. Call on a validated definition.
+    pub fn caps(&self) -> Caps {
+        let role = |r: &str| self.role(r).map(str::to_string);
+        let scalar = |r: &str, param: &str| {
+            let command = self.role(r)?;
+            Some(ScalarCaps {
+                command: command.to_string(),
+                range: self.range_of(command, param)?,
+            })
+        };
+        Caps {
+            on: role("on"),
+            off: role("off"),
+            color: self.role("color_rgb").map(|c| ColorCaps {
+                command: c.to_string(),
+                brightness: self.range_of(c, "brightness"),
+            }),
+            brightness: scalar("brightness", "level"),
+            effect: self.role("effect").and_then(|c| {
+                Some(EffectCaps {
+                    command: c.to_string(),
+                    mode: self.range_of(c, "mode")?,
+                    speed: self.range_of(c, "speed"),
+                    brightness: self.range_of(c, "brightness"),
+                })
+            }),
+            effect_speed: scalar("effect_speed", "value"),
+        }
     }
 
     /// Run conformance vectors and report every mismatch (empty means all passed).
@@ -696,6 +819,36 @@ mod tests {
             }),
             Err(Error::Invalid(_))
         ));
+    }
+
+    #[test]
+    fn role_conventions_are_enforced() {
+        let with_role = |role: &'static str| {
+            move |v: &mut serde_json::Value| v["roles"] = serde_json::json!({ role: "c" })
+        };
+        // BASE command "c" has only parameter "v": it is not a colour, brightness, effect or speed command
+        assert!(matches!(
+            with(with_role("color_rgb")),
+            Err(Error::Invalid(_))
+        ));
+        assert!(matches!(
+            with(with_role("brightness")),
+            Err(Error::Invalid(_))
+        ));
+        assert!(matches!(with(with_role("effect")), Err(Error::Invalid(_))));
+        assert!(matches!(
+            with(with_role("effect_speed")),
+            Err(Error::Invalid(_))
+        ));
+        // "on"/"off" must work with no arguments; v has no default
+        assert!(matches!(with(with_role("on")), Err(Error::Invalid(_))));
+        assert!(with(|v| {
+            v["roles"] = serde_json::json!({"on": "c"});
+            v["commands"]["c"]["params"]["v"]["default"] = 7.into();
+        })
+        .is_ok());
+        // unknown roles are allowed and ignored
+        assert!(with(|v| v["roles"] = serde_json::json!({"future_role": "c"})).is_ok());
     }
 
     #[test]

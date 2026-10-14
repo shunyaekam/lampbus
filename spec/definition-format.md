@@ -79,16 +79,19 @@ Keys in definitions are protocol facts needed for interoperability with the owne
 
 ## Roles
 
-Roles let hosts (Matter, MCP, UIs) use any lamp without knowing its command names. A role maps to a command.
+Roles let hosts (Matter, MCP, UIs, the core) use any lamp without knowing its command names. A role maps to a
+command, and the format fixes the **parameter names** each role's command must use. The validator enforces this.
 
-| Role | Meaning |
-|---|---|
-| `on`, `off` | Power. A lamp with only `off` is turned on by sending a colour or effect. |
-| `color_rgb` | Command with parameters `r`, `g`, `b`. |
-| `brightness` | Command with a brightness parameter (see its `min`/`max`). |
-| `effect`, `effect_speed` | Built-in effects (`effects` lists the ids). |
+| Role | Command must use | Optional | Meaning |
+|---|---|---|---|
+| `on`, `off` | nothing: every parameter needs a `default` | | Power. A lamp with no `on` is turned on by sending a colour or effect; with no `off`, the host sends black. |
+| `color_rgb` | `r`, `g`, `b` | `brightness` (inline brightness) | Set a colour. |
+| `brightness` | `level` | | Separate brightness control. Range comes from the parameter's `min`/`max`. A lamp with neither this nor an inline `brightness` gets its colour scaled by the host. |
+| `effect` | `mode` | `speed`, `brightness` | Run a built-in effect; ids are listed in `effects`. |
+| `effect_speed` | `value` | | Separate speed control for the running effect. |
 
-More roles will be added as more lamps are described; roles a host does not know are ignored.
+A host derives what a lamp can do from these roles alone (`Definition::caps()` in the reference crate). Roles a host
+does not know are ignored, so new roles can be added without breaking old definitions.
 
 ## Vectors
 

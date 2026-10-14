@@ -117,6 +117,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "lampbus-render"
+version = "0.0.1"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
 name = "libc"
 version = "0.2.190"
 source = "registry+https://github.com/rust-lang/crates.io-index"

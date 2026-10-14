@@ -1,0 +1,15 @@
+[package]
+name = "lampbus-render"
+version = "0.0.1"
+description = "Pure rendering for lamps: colour math, a declarative animation format, and the output pipeline (calibration, smoothing, temporal dithering)"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+serde_json = "1"
+
+[lints]
+workspace = true

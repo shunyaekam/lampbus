@@ -106,3 +106,46 @@ fn encoding_is_total_and_fixed_length() {
         }
     }
 }
+
+#[test]
+fn capabilities_match_what_each_family_can_do() {
+    let defs = load_all();
+    let caps = |id: &str| defs.iter().find(|(_, d)| d.id == id).unwrap().1.caps();
+
+    let i = caps("istrip-ssl");
+    assert_eq!(i.off.as_deref(), Some("off"));
+    assert!(i.on.is_none(), "powered on by sending a colour");
+    let color = i.color.unwrap();
+    assert_eq!(
+        color.brightness.map(|r| (r.min, r.max)),
+        Some((0.0, 100.0)),
+        "brightness rides inside the colour frame"
+    );
+    assert!(i.brightness.is_some() && i.effect.is_some() && i.effect_speed.is_some());
+    let effect = i.effect.unwrap();
+    assert_eq!((effect.mode.min, effect.mode.max), (1.0, 12.0));
+
+    let e = caps("elk-bledom");
+    assert!(e.on.is_some() && e.off.is_some());
+    assert!(
+        e.color.unwrap().brightness.is_none(),
+        "separate brightness command"
+    );
+    assert_eq!(
+        e.brightness.map(|b| (b.range.min, b.range.max)),
+        Some((0.0, 100.0))
+    );
+    assert!(e.effect.is_none());
+
+    let t = caps("triones");
+    assert!(
+        t.brightness.is_none(),
+        "no brightness control: the core must scale the colour"
+    );
+
+    let g = caps("govee-h61");
+    assert_eq!(
+        g.brightness.map(|b| (b.range.min, b.range.max)),
+        Some((0.0, 255.0))
+    );
+}

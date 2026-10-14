@@ -81,7 +81,7 @@ impl Definition {
 }
 
 /// A parameter is accepted if it is declared or appears in the frame.
-fn uses_param(cmd: &Command, name: &str) -> bool {
+pub(crate) fn uses_param(cmd: &Command, name: &str) -> bool {
     cmd.params.contains_key(name)
         || cmd.frame.iter().any(|e| match e {
             Elem::Param(p) => p == name,
