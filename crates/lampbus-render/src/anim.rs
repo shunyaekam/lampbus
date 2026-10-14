@@ -39,14 +39,14 @@ pub struct Sample {
     pub level: f64,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 enum Ease {
     Linear,
     Smooth,
     Hold,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 struct Key {
     t: f64,
     rgb: Rgb,
@@ -54,7 +54,7 @@ struct Key {
     ease: Ease,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 enum Kind {
     Keyframes {
         keys: Vec<Key>,
@@ -81,7 +81,7 @@ enum Kind {
 }
 
 /// A validated animation.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Animation {
     /// Frames per second the animation wants to be sampled at.
     pub fps: f64,

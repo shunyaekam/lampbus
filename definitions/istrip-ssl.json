@@ -11,9 +11,9 @@
   },
   "roles": { "off": "off", "color_rgb": "color", "brightness": "brightness", "effect": "effect", "effect_speed": "speed" },
   "effects": [
-    {"id": 1, "name": "Fade7"}, {"id": 2, "name": "Fade3"}, {"id": 3, "name": "Breath R"}, {"id": 4, "name": "Strobe R"},
-    {"id": 5, "name": "Breath7"}, {"id": 6, "name": "Breath3"}, {"id": 7, "name": "Breath B"}, {"id": 8, "name": "Strobe B"},
-    {"id": 9, "name": "Flash7"}, {"id": 10, "name": "Flash3"}, {"id": 11, "name": "Breath G"}, {"id": 12, "name": "Strobe G"}
+    {"id": 1, "name": "Fade7", "aliases": ["rainbow", "rainbow-fade"]}, {"id": 2, "name": "Fade3"}, {"id": 3, "name": "Breath R"}, {"id": 4, "name": "Strobe R"},
+    {"id": 5, "name": "Breath7", "aliases": ["rainbow-breathe"]}, {"id": 6, "name": "Breath3"}, {"id": 7, "name": "Breath B"}, {"id": 8, "name": "Strobe B"},
+    {"id": 9, "name": "Flash7", "aliases": ["rainbow-flash"]}, {"id": 10, "name": "Flash3"}, {"id": 11, "name": "Breath G"}, {"id": 12, "name": "Strobe G"}
   ],
   "commands": {
     "color": {

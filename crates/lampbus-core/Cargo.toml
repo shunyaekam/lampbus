@@ -1,0 +1,20 @@
+[package]
+name = "lampbus-core"
+version = "0.0.1"
+description = "Sans-I/O controller core for Bluetooth lamps: commands, time and link events in; connect/write/disconnect actions out"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+lampbus-defs = { path = "../lampbus-defs" }
+lampbus-render = { path = "../lampbus-render" }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1"
+
+[lints]
+workspace = true

@@ -132,6 +132,17 @@ pub struct Effect {
     pub id: u8,
     /// Human-readable name.
     pub name: String,
+    /// Other names hosts and users may use for it (for example `rainbow`).
+    #[serde(default)]
+    pub aliases: Vec<String>,
+}
+
+impl Effect {
+    /// Case-insensitive match against the name or any alias.
+    pub fn matches(&self, query: &str) -> bool {
+        self.name.eq_ignore_ascii_case(query)
+            || self.aliases.iter().any(|a| a.eq_ignore_ascii_case(query))
+    }
 }
 
 /// A command parameter: its allowed range and optional default. Undeclared parameters used in a frame are
