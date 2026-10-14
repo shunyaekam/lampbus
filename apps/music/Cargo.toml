@@ -1,0 +1,15 @@
+[package]
+name = "lampbus-music"
+version = "0.0.1"
+description = "Music-reactive lighting: listens to an audio input and sends colour to a running lampbus"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+cpal = "0.18"
+
+[lints]
+workspace = true

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/*", "tools/oracles"]
+members = ["crates/*", "apps/*", "tools/oracles"]
 # the prototypes are standalone and not part of the core workspace
 exclude = ["prototypes"]
 

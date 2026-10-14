@@ -1,0 +1,18 @@
+[package]
+name = "lampbus-screen"
+version = "0.0.1"
+description = "Ambient lighting from your screen: sends the screen's colour to a running lampbus"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+lampbus-render = { path = "../../crates/lampbus-render" }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-graphics = "0.25"
+
+[lints]
+workspace = true
