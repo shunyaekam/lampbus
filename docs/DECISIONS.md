@@ -24,9 +24,15 @@ Short, dated, with the reason. A decision can be reversed; write a new entry ins
   for interoperability are recorded, with vectors that anyone can reproduce.
 - **D10. Measure, don't claim.** Efficiency targets live in [SCORECARD.md](SCORECARD.md) as numbers with methods.
 
+- **D11. Definition format v0 is JSON with a tiny template language** (literals, parameters, linear scale, zero-pad,
+  xor/sum8 checksum, AES-128-ECB wire transform). No expressions, no code. Chosen because the four lamp families
+  checked so far (iStrip, ELK-BLEDOM, Triones, Govee) all fit it; revisit when one does not. See
+  [spec/definition-format.md](../spec/definition-format.md).
+- **D12. Vectors must come from independent oracles**, never from the interpreter under test.
+
 ## Open
 
-- Core API shape (event/action interface) and the definition-format spec: next.
+- Core API shape (event/action interface): next. The definition-format spec is drafted (D11).
 - Matter spike on `rs-matter`: commission a color light to Apple Home, check hue/saturation/brightness.
 - Agent surface (MCP): depends on how the target agents call tools.
 - Whether one repository holds everything or the spec gets its own.

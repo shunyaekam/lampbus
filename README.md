@@ -3,8 +3,9 @@
 A small, fast, embeddable core for controlling Bluetooth lamps, plus the open formats to describe lamps and
 drive them from anything: Matter, MCP (agents), HTTP, or your own app.
 
-> **Status: pre-alpha, design phase.** Nothing here is stable. The two prototypes under `prototypes/` work with one
-> real lamp; the architecture below is the plan, not the current state.
+> **Status: pre-alpha.** Nothing here is stable. Working today: the definitions core (`crates/lampbus-defs`), which
+> reproduces four lamp families from data alone, and two prototypes under `prototypes/` that drive one real lamp.
+> The rest of the architecture below is the plan, not the current state.
 
 ## Why
 
@@ -28,6 +29,10 @@ ESPHome). See [docs/research](docs/research/landscape-2026-10-14.md) for what we
 
 | Path | What |
 |---|---|
+| `spec/` | the lamp definition format (draft) |
+| `definitions/` | lamp definitions as data, each with conformance vectors: iStrip, ELK-BLEDOM, Triones, Govee H61xx |
+| `crates/lampbus-defs/` | Rust crate: parse, validate and encode definitions (`unsafe` forbidden, 10 tests, 54 vectors) |
+| `tools/` | vector generator (independent oracles), size measurement |
 | `docs/` | scorecard, decisions, research |
 | `prototypes/python/` | first working prototype: service, HomeKit bridge, API, CLI |
 | `prototypes/lampd-rs/` | Rust port of the prototype (1.1 MB release binary), the seed of the future core |
