@@ -35,6 +35,7 @@ const KEYS: [&str; 12] = [
     "label",
 ];
 
+#[derive(Clone)]
 pub struct Ctx {
     pub handle: Handle,
     pub library: Library,

@@ -960,3 +960,38 @@ fn holding_the_last_frame_of_an_animation_keeps_its_brightness() {
         "the lamp was left at 20% brightness, not 100%"
     );
 }
+
+#[test]
+fn stopping_an_animation_freezes_what_it_is_showing() {
+    let mut s = Sim::new(vec![dev("elk", "ELK-BLEDOM", "E1")]);
+    s.all(Command::Play {
+        animation: animation(
+            json!({"type":"keyframes","duration":10,"fps":10,"space":"srgb",
+            "keys":[{"t":0,"color":"#000000","level":100},{"t":10,"color":"#c8c8c8","level":50}]}),
+        ),
+        name: Some("fade".into()),
+        brightness: Some(100.0),
+    });
+    s.advance(5_000); // halfway: colour 100, level 75%
+    s.all(Command::StopAnimation);
+    s.advance(1_000);
+    let l = &s.core.snapshot(s.now).lamps[0];
+    assert!(l.animation.is_none() && l.source == "color");
+    assert!(
+        (i32::from(l.rgb[0]) - 100).abs() <= 3,
+        "frozen colour near the halfway value, got {:?}",
+        l.rgb
+    );
+    assert!(
+        (i32::from(l.brightness) - 75).abs() <= 2,
+        "frozen intensity near 75%, got {}",
+        l.brightness
+    );
+    let before = s.writes("E1").len();
+    s.advance(3_000);
+    assert_eq!(
+        s.writes("E1").len(),
+        before,
+        "nothing changes after the freeze"
+    );
+}

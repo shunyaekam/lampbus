@@ -22,6 +22,7 @@ COMMANDS
   save-animation <name> <file>   validate and save an animation spec
   raw <command> [name=value...]  send a protocol command from the lamp's definition
   scan                           find lamps nearby
+  calibrate <brightness|ramp|low>  guided checks to settle open questions about your lamp
   definitions                    lamp families this build understands
   serve                          run the HTTP API (keeps the Bluetooth link, runs animations)
   mcp                            run an MCP server on stdio (for agents; no daemon needed)
@@ -59,6 +60,7 @@ pub enum Cmd {
         args: Map<String, Value>,
     },
     Scan,
+    Calibrate(String),
     Definitions,
     Serve,
     Mcp,
@@ -119,6 +121,7 @@ pub fn parse(argv: Vec<String>) -> Result<(Global, Cmd), String> {
         "status" => Cmd::Status,
         "library" => Cmd::Library,
         "scan" => Cmd::Scan,
+        "calibrate" => Cmd::Calibrate(arg(0, "calibrate <brightness|ramp|low>")?.to_string()),
         "definitions" => Cmd::Definitions,
         "serve" => Cmd::Serve,
         "mcp" => Cmd::Mcp,
@@ -269,6 +272,50 @@ pub fn render(snapshot: &Value) -> String {
         .join("\n")
 }
 
+/// One step of a guided calibration: what to tell the user, what to send, and how long to look.
+pub struct Step {
+    pub say: &'static str,
+    pub control: Value,
+    pub seconds: u64,
+}
+
+/// The guided checks, as data so they can be tested without a lamp.
+pub fn calibration_steps(what: &str) -> Result<(&'static str, Vec<Step>), String> {
+    let white = |b: u32| json!({"color": "white", "brightness": b});
+    match what {
+        "brightness" => {
+            let mut steps = Vec::new();
+            for _ in 0..3 {
+                steps.push(Step { say: "brightness 64", control: white(64), seconds: 3 });
+                steps.push(Step { say: "brightness 100", control: white(100), seconds: 3 });
+            }
+            Ok((
+                "Does the lamp look brighter at 100 than at 64? If they look identical, the lamp's real range is probably 0-64: tell the maintainers (open assumption A1).",
+                steps,
+            ))
+        }
+        "ramp" => Ok((
+            "Watch the lamp fade up over 20 seconds. Are there visible steps, or does the middle of the range look too bright too early? (assumption A2, set color_gamma in the config.)",
+            vec![Step {
+                say: "fading 0% to 100% over 20 s",
+                control: json!({"animation": {"type": "keyframes", "duration": 20, "fps": 20, "space": "srgb", "then": "hold",
+                    "keys": [{"t": 0, "color": "white", "level": 0}, {"t": 20, "color": "white", "level": 100}]}}),
+                seconds: 24,
+            }],
+        )),
+        "low" => Ok((
+            "Watch the lamp fade from nearly off to 3% over 30 seconds. It should look smooth, not flicker or jump (assumption A3: temporal dithering).",
+            vec![Step {
+                say: "fading 0% to 3% over 30 s",
+                control: json!({"animation": {"type": "keyframes", "duration": 30, "fps": 20, "space": "srgb", "then": "hold",
+                    "keys": [{"t": 0, "color": "#ff8030", "level": 0}, {"t": 30, "color": "#ff8030", "level": 3}]}}),
+                seconds: 34,
+            }],
+        )),
+        other => Err(format!("unknown calibration {other:?}; choose brightness, ramp or low")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -339,6 +386,24 @@ mod tests {
             panic!()
         };
         assert_eq!((command.as_str(), args.len()), ("color", 3));
+    }
+
+    #[test]
+    fn calibration_steps_are_valid_controls() {
+        for what in ["brightness", "ramp", "low"] {
+            let (question, steps) = calibration_steps(what).unwrap();
+            assert!(!question.is_empty() && !steps.is_empty());
+            for st in steps {
+                let lib =
+                    crate::library::Library::new(std::env::temp_dir().join("lampbus-test-none"));
+                assert!(
+                    crate::control::commands(&lib, &st.control).is_ok(),
+                    "{what}: {}",
+                    st.say
+                );
+            }
+        }
+        assert!(calibration_steps("nope").is_err());
     }
 
     #[test]

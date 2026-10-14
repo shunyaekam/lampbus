@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Lamp">
+<meta name="theme-color" content="#0e0f12">
+<title>lampbus</title>
+<style>
+  :root { --bg:#0e0f12; --card:#181a20; --line:#272a33; --fg:#eceef3; --dim:#8d93a3; --acc:#ffb347; --bad:#ff6b6b; }
+  @media (prefers-color-scheme: light) { :root { --bg:#f4f5f8; --card:#fff; --line:#dfe2ea; --fg:#14161b; --dim:#5d6372; --acc:#d9790c; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.4 -apple-system, system-ui, "Segoe UI", sans-serif;
+         padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom)); max-width: 520px; margin-inline:auto; }
+  h1 { font-size: 15px; font-weight: 600; letter-spacing:.04em; color:var(--dim); margin: 4px 0 14px; text-transform: lowercase; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:16px; margin-bottom:14px; }
+  .top { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .name { font-weight:600; } .sub { color:var(--dim); font-size:13px; }
+  .sub.err { color:var(--bad); }
+  .power { width:56px; height:32px; border-radius:16px; border:1px solid var(--line); background:var(--line); position:relative; cursor:pointer; flex:none; }
+  .power::after { content:""; position:absolute; top:3px; left:3px; width:24px; height:24px; border-radius:50%; background:var(--fg); transition:transform .15s; }
+  .power.on { background:var(--acc); border-color:var(--acc); } .power.on::after { transform:translateX(24px); background:#fff; }
+  label { display:block; color:var(--dim); font-size:13px; margin:16px 0 6px; }
+  input[type=range] { width:100%; accent-color: var(--acc); height:32px; }
+  input[type=color] { width:100%; height:48px; border:1px solid var(--line); border-radius:12px; background:none; padding:2px; }
+  .chips { display:flex; flex-wrap:wrap; gap:8px; }
+  button.chip { border:1px solid var(--line); background:var(--bg); color:var(--fg); border-radius:999px; padding:8px 14px; font:inherit; font-size:14px; cursor:pointer; }
+  button.chip:active, button.chip.on { border-color:var(--acc); color:var(--acc); }
+  .swatches { display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; }
+  .sw { width:36px; height:36px; border-radius:50%; border:2px solid var(--line); cursor:pointer; }
+  .hide { display:none; }
+  #auth input { width:100%; padding:12px; border-radius:10px; border:1px solid var(--line); background:var(--bg); color:var(--fg); font:inherit; }
+</style>
+</head>
+<body>
+<h1>lampbus</h1>
+<div id="auth" class="card hide">
+  <div class="name">API token</div>
+  <div class="sub" style="margin:4px 0 10px">Paste the contents of <code>~/.config/lampbus/token</code>. It stays in this browser.</div>
+  <input id="tok" type="password" autocomplete="off" placeholder="token">
+</div>
+<div id="lamps"></div>
+<div class="card">
+  <label style="margin-top:0">Animations</label><div id="anims" class="chips"></div>
+  <label>Presets</label><div id="presets" class="chips"></div>
+</div>
+<script>
+const $ = (id) => document.getElementById(id);
+let token = new URLSearchParams(location.search).get('token') || localStorage.getItem('lampbus-token') || '';
+if (new URLSearchParams(location.search).has('token')) { localStorage.setItem('lampbus-token', token); history.replaceState(null, '', location.pathname); }
+let snap = { lamps: [] }, lib = { animations: {}, presets: {} }, busy = null;
+
+async function api(path, body) {
+  const r = await fetch(path, { method: body ? 'POST' : 'GET', headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  if (r.status === 401) { $('auth').classList.remove('hide'); throw new Error('unauthorized'); }
+  const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j;
+}
+const ctl = (device, o) => api('/api/control', { device, ...o }).then((s) => { snap = s; draw(); }).catch((e) => alert(e.message));
+const hex = (rgb) => '#' + rgb.map((v) => v.toString(16).padStart(2, '0')).join('');
+const rgbOf = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+const SW = ['#ff3b30', '#ff9500', '#ffd60a', '#34c759', '#00c7be', '#0a84ff', '#bf5af2', '#ff2d92', '#ffd9a0', '#ffffff'];
+
+function draw() {
+  if (busy) return;
+  $('lamps').innerHTML = '';
+  for (const l of snap.lamps) {
+    const el = document.createElement('div'); el.className = 'card';
+    const state = l.last_error ? `<span class="sub err">${l.last_error}</span>` : `<span class="sub">${l.on ? l.source + (l.animation ? ' · ' + l.animation : '') : 'off'} · ${l.link}</span>`;
+    el.innerHTML = `<div class="top"><div><div class="name">${l.alias}</div>${state}</div><div class="power ${l.on ? 'on' : ''}" role="switch" aria-checked="${l.on}"></div></div>
+      <label>Colour</label><input type="color" value="${hex(l.rgb)}"><div class="swatches">${SW.map((c) => `<div class="sw" style="background:${c}" data-c="${c}"></div>`).join('')}</div>
+      <label>Brightness ${l.brightness}%</label><input type="range" min="1" max="100" value="${l.brightness}">
+      ${l.caps.effects.length ? `<label>Built-in effects</label><div class="chips">${l.caps.effects.map((e) => `<button class="chip ${l.effect === e.id ? 'on' : ''}" data-e="${e.id}">${e.name}</button>`).join('')}</div>` : ''}`;
+    el.querySelector('.power').onclick = () => ctl(l.alias, { power: !l.on });
+    const col = el.querySelector('input[type=color]');
+    col.onchange = () => ctl(l.alias, { color: rgbOf(col.value) });
+    el.querySelectorAll('.sw').forEach((s) => (s.onclick = () => ctl(l.alias, { color: rgbOf(s.dataset.c) })));
+    const rg = el.querySelector('input[type=range]');
+    rg.onpointerdown = () => (busy = 1); rg.onpointerup = () => { busy = null; };
+    rg.oninput = () => { el.querySelector('label:nth-of-type(2)').textContent = 'Brightness ' + rg.value + '%'; };
+    rg.onchange = () => { busy = null; ctl(l.alias, { brightness: +rg.value }); };
+    el.querySelectorAll('[data-e]').forEach((b) => (b.onclick = () => ctl(l.alias, { effect: +b.dataset.e })));
+    $('lamps').appendChild(el);
+  }
+  if (!snap.lamps.length) $('lamps').innerHTML = '<div class="card sub">No lamps found yet.</div>';
+}
+function chips(id, items, key) {
+  $(id).innerHTML = '';
+  for (const [n, spec] of Object.entries(items)) {
+    const b = document.createElement('button'); b.className = 'chip'; b.textContent = spec.title || n; b.title = spec.description || '';
+    b.onclick = () => ctl(undefined, { [key]: n }); $(id).appendChild(b);
+  }
+  const stop = document.createElement('button'); if (key === 'animation') { stop.className = 'chip'; stop.textContent = 'stop'; stop.onclick = () => ctl(undefined, { stop_animation: true }); $(id).appendChild(stop); }
+}
+function live() {
+  const ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/events?token=' + encodeURIComponent(token));
+  ws.onmessage = (m) => { snap = JSON.parse(m.data); draw(); };
+  ws.onclose = () => setTimeout(live, 2000);
+}
+$('tok').onchange = () => { token = $('tok').value.trim(); localStorage.setItem('lampbus-token', token); location.reload(); };
+(async () => {
+  try {
+    lib = await api('/api/library'); chips('anims', lib.animations, 'animation'); chips('presets', lib.presets, 'preset');
+    snap = await api('/api/state'); draw(); live();
+  } catch (e) { if (e.message !== 'unauthorized') document.body.insertAdjacentHTML('beforeend', '<p class="sub err">' + e.message + '</p>'); }
+})();
+</script>
+</body>
+</html>

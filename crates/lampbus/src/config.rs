@@ -26,6 +26,19 @@ struct File {
     definitions_dir: Option<String>,
     library_dir: Option<String>,
     bind: Option<String>,
+    udp_stream: Option<String>,
+    ddp: Option<String>,
+    stream_device: Option<String>,
+    schedules: Vec<FileSchedule>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct FileSchedule {
+    name: Option<String>,
+    at: String,
+    days: Option<Value>,
+    control: Value,
 }
 
 /// Everything the binary needs besides the core's own [`Config`].
@@ -35,6 +48,13 @@ pub struct Settings {
     pub library_dir: PathBuf,
     pub bind: String,
     pub config_dir: PathBuf,
+    /// UDP address for simple `r g b [brightness]` frames (off unless set).
+    pub udp_stream: Option<String>,
+    /// UDP address for DDP packets (off unless set).
+    pub ddp: Option<String>,
+    /// Lamp that live input drives (default: all).
+    pub stream_device: Option<String>,
+    pub schedules: Vec<crate::schedule::Entry>,
 }
 
 pub fn home() -> PathBuf {
@@ -98,6 +118,15 @@ pub fn load(path: Option<&Path>) -> Result<Settings, String> {
     if let Some(d) = file.dither {
         core.dither = d;
     }
+    let mut schedules = Vec::new();
+    for (i, sc) in file.schedules.into_iter().enumerate() {
+        schedules.push(crate::schedule::Entry {
+            name: sc.name.unwrap_or_else(|| format!("schedule {}", i + 1)),
+            minute: crate::schedule::parse_time(&sc.at)?,
+            days: crate::schedule::parse_days(sc.days.as_ref())?,
+            control: sc.control,
+        });
+    }
     Ok(Settings {
         core,
         definitions_dir: file.definitions_dir.as_deref().map(expand),
@@ -107,6 +136,10 @@ pub fn load(path: Option<&Path>) -> Result<Settings, String> {
             .map_or_else(|| config_dir.join("library"), expand),
         bind: file.bind.unwrap_or_else(|| "127.0.0.1:8787".into()),
         config_dir,
+        udp_stream: file.udp_stream,
+        ddp: file.ddp,
+        stream_device: file.stream_device,
+        schedules,
     })
 }
 

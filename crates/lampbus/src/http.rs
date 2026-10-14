@@ -10,7 +10,7 @@ use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Query, Request, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::{self, Next};
-use axum::response::{IntoResponse, Response};
+use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post, put};
 use axum::{Json, Router};
 use lampbus_core::{Command, Target};
@@ -84,6 +84,7 @@ pub async fn serve(ctx: Ctx, definitions: Value, addr: &str, token: String) -> s
         definitions,
     });
     let router = Router::new()
+        .route("/", get(|| async { Html(include_str!("ui.html")) }))
         .route("/healthz", get(|| async { Json(json!({"ok": true})) }))
         .route("/api/state", get(|State(a): Shared| async move {
             a.ctx.ensure_lamps(std::time::Duration::from_secs(1)).await;

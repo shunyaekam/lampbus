@@ -174,6 +174,20 @@ impl Lamp {
         self.dirty = true;
     }
 
+    /// Stop an animation and keep what it is showing right now (colour and intensity) as the static look.
+    pub(crate) fn freeze_animation(&mut self, now: Ms) {
+        if let Some(run) = self.look.anim.take() {
+            let s = run.anim.sample(now.saturating_sub(run.t0) as f64 / 1000.0);
+            self.look.rgb = [
+                s.rgb[0].round() as u8,
+                s.rgb[1].round() as u8,
+                s.rgb[2].round() as u8,
+            ];
+            self.look.brightness = (self.look.brightness * s.level).clamp(0.0, 100.0);
+        }
+        self.dirty = true;
+    }
+
     pub(crate) fn set_stream(&mut self, rgb: Rgb, level: f64, now: Ms, cfg: &Config) {
         if !self.look.on {
             return;

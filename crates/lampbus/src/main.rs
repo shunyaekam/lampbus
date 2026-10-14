@@ -6,10 +6,12 @@ mod config;
 mod control;
 #[cfg(feature = "http")]
 mod http;
+mod ingest;
 mod library;
 #[cfg(feature = "mcp")]
 mod mcp;
 mod remote;
+mod schedule;
 
 use cli::{Cmd, Global};
 use config::Settings;
@@ -116,6 +118,35 @@ async fn serve(settings: &Settings) -> Result<(), String> {
     if settings.core.auto_adopt {
         ctx.handle.discover().await;
     }
+    schedule::check(&ctx, &settings.schedules)?;
+    tokio::spawn(schedule::run(
+        std::sync::Arc::new(ctx.clone()),
+        settings.schedules.clone(),
+    ));
+    let target = settings
+        .stream_device
+        .clone()
+        .map_or(lampbus_core::Target::All, lampbus_core::Target::Named);
+    if let Some(addr) = settings.udp_stream.clone() {
+        eprintln!("lampbus: UDP stream input on {addr}");
+        let (h, t) = (ctx.handle.clone(), target.clone());
+        tokio::spawn(async move {
+            eprintln!(
+                "lampbus: udp_stream stopped: {:?}",
+                ingest::run_simple(addr, h, t).await
+            )
+        });
+    }
+    if let Some(addr) = settings.ddp.clone() {
+        eprintln!("lampbus: DDP input on {addr}");
+        let h = ctx.handle.clone();
+        tokio::spawn(async move {
+            eprintln!(
+                "lampbus: ddp stopped: {:?}",
+                ingest::run_ddp(addr, h, target).await
+            )
+        });
+    }
     http::serve(ctx, config::summarise(&defs), &settings.bind, token)
         .await
         .map_err(|e| format!("cannot serve on {}: {e}", settings.bind))
@@ -215,6 +246,16 @@ async fn client(g: &Global, settings: &Settings, cmd: Cmd) -> Result<(), String>
             ctx.handle.settled(&[], Duration::from_secs(30)).await?;
             println!("sent");
         }
+        Cmd::Calibrate(what) => {
+            let (question, steps) = cli::calibration_steps(&what)?;
+            for st in steps {
+                println!("-> {}", st.say);
+                control::control(&ctx, &st.control).await?;
+                ctx.handle.settled(&[], Duration::from_secs(30)).await?;
+                tokio::time::sleep(Duration::from_secs(st.seconds)).await;
+            }
+            println!("\n{question}");
+        }
         Cmd::Help | Cmd::Version | Cmd::Definitions | Cmd::Serve | Cmd::Mcp => {}
     }
     Ok(())
@@ -271,6 +312,15 @@ async fn via_remote(g: &Global, r: &Remote, cmd: Cmd) -> Result<(), String> {
             let body = json!({"command": command, "args": args, "device": g.device});
             r.call("POST", "/api/raw", Some(&body)).await?;
             println!("sent");
+        }
+        Cmd::Calibrate(what) => {
+            let (question, steps) = cli::calibration_steps(&what)?;
+            for st in steps {
+                println!("-> {}", st.say);
+                r.call("POST", "/api/control", Some(&st.control)).await?;
+                tokio::time::sleep(Duration::from_secs(st.seconds)).await;
+            }
+            println!("\n{question}");
         }
         Cmd::Help | Cmd::Version | Cmd::Definitions | Cmd::Serve | Cmd::Mcp => {}
     }

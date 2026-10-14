@@ -154,7 +154,7 @@ pub enum Command {
         /// Master brightness percent.
         brightness: Option<f64>,
     },
-    /// Stop any animation and keep the current colour.
+    /// Stop any animation and keep exactly what it is showing right now.
     StopAnimation,
     /// One frame of a live source (screen, music). Overrides everything until it stops arriving.
     Stream {
@@ -562,7 +562,7 @@ impl Core {
                 }
             }
             Command::StopAnimation => {
-                lamp.stop_animation();
+                lamp.freeze_animation(now);
                 lamp.look.active = None;
             }
             Command::Stream { rgb, brightness } => {
