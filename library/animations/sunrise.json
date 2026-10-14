@@ -1,0 +1,8 @@
+{"description": "30-minute wake-up: deep red ember to warm daylight. Holds the final colour.", "type": "keyframes", "duration": 1800, "loop": false, "fps": 2, "space": "rgb", "then": "hold",
+ "keys": [
+  {"t": 0,    "color": "#ff1000", "level": 1,   "ease": "smooth"},
+  {"t": 450,  "color": "#ff3a00", "level": 15,  "ease": "smooth"},
+  {"t": 990,  "color": "#ff7a10", "level": 45,  "ease": "smooth"},
+  {"t": 1440, "color": "#ffb060", "level": 75,  "ease": "smooth"},
+  {"t": 1800, "color": "#ffe0b0", "level": 100}
+ ]}

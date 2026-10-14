@@ -1,0 +1,21 @@
+# build output / environments
+target/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+
+# runtime state, secrets and logs: never commit
+*.log
+*.state
+homekit.state
+token
+.env
+
+# vendor material and reverse-engineering workspace: not ours to redistribute (kept outside the repo)
+apk-download/
+xapk-extract/
+so-extract/
+jadx-out/
+*.apk
+*.xapk

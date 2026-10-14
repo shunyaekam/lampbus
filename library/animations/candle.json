@@ -1,0 +1,1 @@
+{"description": "Warm candle flame with natural flicker.", "title": "Candle", "homekit": true, "type": "gen", "gen": "candle", "fps": 25, "params": {"color": "candle", "flicker": 35}}

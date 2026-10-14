@@ -1,0 +1,1 @@
+{"description": "Warm white that slowly swells and fades, 8 s per breath. Good for winding down.", "type": "gen", "gen": "breathe", "fps": 20, "params": {"color": "warm", "period": 8, "min": 10, "max": 70}}

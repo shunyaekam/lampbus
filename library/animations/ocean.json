@@ -1,0 +1,6 @@
+{"description": "Slow teal to deep-blue swell, 40 s loop.", "type": "keyframes", "duration": 40, "loop": true, "fps": 20, "space": "hsv",
+ "keys": [
+  {"t": 0,  "color": {"h": 185, "s": 90, "v": 100}, "level": 70, "ease": "smooth"},
+  {"t": 14, "color": {"h": 215, "s": 95, "v": 100}, "level": 100, "ease": "smooth"},
+  {"t": 28, "color": {"h": 235, "s": 100, "v": 100}, "level": 55, "ease": "smooth"}
+ ]}

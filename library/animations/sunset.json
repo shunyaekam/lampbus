@@ -1,0 +1,7 @@
+{"description": "30-minute wind-down: warm white fades through amber and ember red, then switches off.", "type": "keyframes", "duration": 1800, "loop": false, "fps": 2, "space": "rgb", "then": "off",
+ "keys": [
+  {"t": 0,    "color": "#ffe0b0", "level": 80, "ease": "smooth"},
+  {"t": 600,  "color": "#ff9a30", "level": 45, "ease": "smooth"},
+  {"t": 1300, "color": "#ff3a00", "level": 12, "ease": "smooth"},
+  {"t": 1800, "color": "#ff1000", "level": 1}
+ ]}

@@ -1,0 +1,1 @@
+{"description": "Slow full-spectrum colour drift, one lap per minute.", "type": "gen", "gen": "rainbow", "fps": 20, "params": {"period": 60, "saturation": 100}}

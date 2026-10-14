@@ -1,0 +1,7 @@
+{"description": "Slow magma: red, orange and hot pink pulses, 30 s loop.", "type": "keyframes", "duration": 30, "loop": true, "fps": 20, "space": "hsv",
+ "keys": [
+  {"t": 0,  "color": {"h": 5, "s": 100, "v": 100}, "level": 60, "ease": "smooth"},
+  {"t": 9,  "color": {"h": 25, "s": 100, "v": 100}, "level": 100, "ease": "smooth"},
+  {"t": 18, "color": {"h": 340, "s": 90, "v": 100}, "level": 70, "ease": "smooth"},
+  {"t": 25, "color": {"h": 12, "s": 100, "v": 100}, "level": 85, "ease": "smooth"}
+ ]}

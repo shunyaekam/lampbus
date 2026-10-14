@@ -1,0 +1,1 @@
+{"description": "Green, blue and violet curtains drifting slowly.", "title": "Aurora", "homekit": true, "type": "gen", "gen": "aurora", "fps": 20, "params": {"palette": ["#00ff90", "#0090ff", "#8a2be2", "#00d4c8"], "speed": 0.15}}
