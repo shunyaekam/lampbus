@@ -1,8 +1,8 @@
 [workspace]
 resolver = "2"
 members = ["crates/*", "apps/*", "tools/oracles"]
-# the prototypes are standalone and not part of the core workspace
-exclude = ["prototypes"]
+# the fuzz targets need nightly and live in their own workspace
+exclude = ["fuzz"]
 
 [workspace.package]
 edition = "2021"

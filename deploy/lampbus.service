@@ -1,0 +1,23 @@
+# systemd user unit: keeps `lampbus serve` running on an always-on Linux machine.
+#   install:  mkdir -p ~/.config/systemd/user && cp lampbus.service ~/.config/systemd/user/
+#             systemctl --user daemon-reload && systemctl --user enable --now lampbus
+#   survive logout / start at boot:  loginctl enable-linger "$USER"
+#   logs:     journalctl --user -u lampbus -f
+[Unit]
+Description=lampbus: Bluetooth lamp controller
+After=bluetooth.target network-online.target
+Wants=bluetooth.target
+
+[Service]
+ExecStart=%h/.local/bin/lampbus serve
+Restart=on-failure
+RestartSec=5
+# the daemon needs only Bluetooth and its own config directory
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.config/lampbus
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

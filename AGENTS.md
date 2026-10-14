@@ -11,7 +11,7 @@ CLI, an HTTP API, or an agent over MCP. Lamps are data (JSON definitions + test 
 are thin. Goal: the cleanest, smallest, cheapest-to-run code that does the job, measured, not claimed.
 
 **Status (2026-10-14): pre-alpha.** Works on the owner's iStrip lamp. Only that definition is hardware-verified; ELK-BLEDOM,
-Triones and Govee are source-verified. No Matter/HomeKit, no screen or music apps, no web UI, no fuzzing yet.
+Triones and Govee are source-verified. No Matter/HomeKit yet. Apps (`apps/screen`, `apps/music`), the web UI, UDP/DDP input and schedules exist but are only unit-tested and smoke-tested, not used in anger.
 
 ## Rules (each derived in PRINCIPLES.md)
 
@@ -48,9 +48,10 @@ Triones and Govee are source-verified. No Matter/HomeKit, no screen or music app
 ```
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings      # denies unwrap/expect/panic/indexing in non-test code
-cargo test --workspace                                      # 65 tests as of 2026-10-14
+cargo test --workspace                                      # 84 tests as of 2026-10-14
 cargo run -q -p lampbus-oracles -- --check                  # committed vectors match the oracles
 cargo build -p lampbus --no-default-features                # optional adapters stay optional
+cd fuzz && cargo +nightly fuzz run core_sequences -- -max_total_time=60   # after touching the core
 ```
 Linux needs `libdbus-1-dev` and `pkg-config`. CI runs all of this on Linux and macOS. If you fix a bug in the core, add a
 simulation test in `crates/lampbus-core/tests/sim.rs` that fails without the fix (the four bugs found so far were found there).

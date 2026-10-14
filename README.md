@@ -97,6 +97,9 @@ Needs Rust 1.80+. On Linux you also need `libdbus-1-dev` and `pkg-config` (for B
 | `crates/lampbus-shell` | desktop Bluetooth shell |
 | `definitions/` | lamp definitions + conformance vectors |
 | `library/` | starter animations and presets |
+| `apps/` | `lampbus-screen` (screen ambient light, macOS) and `lampbus-music` (music reactive); send colour to the daemon over UDP |
+| `deploy/` | systemd and launchd units and an installer for an always-on machine |
+| `fuzz/` | cargo-fuzz targets (nightly) |
 | `tools/oracles` | generates the conformance vectors from independent implementations |
 | `spec/`, `docs/` | formats, scorecard, decisions, research |
 

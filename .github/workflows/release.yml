@@ -1,0 +1,39 @@
+name: release
+# Builds binaries when a version tag is pushed. Nothing is published until you push a tag.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest,    name: linux-x86_64 }
+          - { os: ubuntu-24.04-arm, name: linux-aarch64 }
+          - { os: macos-latest,     name: macos-aarch64 }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev libasound2-dev pkg-config
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo build --release -p lampbus -p lampbus-screen -p lampbus-music
+      - name: Package
+        run: |
+          mkdir dist && cp target/release/lampbus target/release/lampbus-music dist/
+          [ -f target/release/lampbus-screen ] && cp target/release/lampbus-screen dist/ || true
+          cp -r deploy dist/deploy && tar -C dist -czf lampbus-${{ matrix.name }}.tar.gz .
+      - uses: actions/upload-artifact@v4
+        with: { name: "lampbus-${{ matrix.name }}", path: "lampbus-${{ matrix.name }}.tar.gz" }
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions: { contents: write }
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts, merge-multiple: true }
+      - uses: softprops/action-gh-release@v2
+        with: { files: "artifacts/*.tar.gz", generate_release_notes: true }

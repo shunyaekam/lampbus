@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- launchd agent: keeps `lampbus serve` running on a Mac.
+       cp com.lampbus.serve.plist ~/Library/LaunchAgents/
+       launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.lampbus.serve.plist
+       launchctl kickstart -k gui/$(id -u)/com.lampbus.serve
+     Replace __HOME__ with your home directory. The first run asks for Bluetooth permission. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.lampbus.serve</string>
+  <key>ProgramArguments</key>
+  <array><string>__HOME__/.local/bin/lampbus</string><string>serve</string></array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>StandardErrorPath</key><string>__HOME__/Library/Logs/lampbus.log</string>
+  <key>StandardOutPath</key><string>__HOME__/Library/Logs/lampbus.log</string>
+</dict>
+</plist>
