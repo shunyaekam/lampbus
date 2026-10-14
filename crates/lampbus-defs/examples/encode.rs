@@ -9,14 +9,21 @@ use std::process::ExitCode;
 
 fn run() -> Result<(), String> {
     let mut argv = std::env::args().skip(1);
-    let path = argv.next().ok_or("usage: encode <definition.json> <command> [name=value ...]")?;
+    let path = argv
+        .next()
+        .ok_or("usage: encode <definition.json> <command> [name=value ...]")?;
     let command = argv.next().ok_or("missing command name")?;
     let text = std::fs::read_to_string(&path).map_err(|e| format!("{path}: {e}"))?;
     let def = Definition::from_json(&text).map_err(|e| e.to_string())?;
     let mut owned: Vec<(String, f64)> = Vec::new();
     for a in argv {
-        let (k, v) = a.split_once('=').ok_or_else(|| format!("argument {a:?} must be name=value"))?;
-        owned.push((k.to_string(), v.parse().map_err(|_| format!("{v:?} is not a number"))?));
+        let (k, v) = a
+            .split_once('=')
+            .ok_or_else(|| format!("argument {a:?} must be name=value"))?;
+        owned.push((
+            k.to_string(),
+            v.parse().map_err(|_| format!("{v:?} is not a number"))?,
+        ));
     }
     let args: Vec<(&str, f64)> = owned.iter().map(|(k, v)| (k.as_str(), *v)).collect();
     let out = def.encode(&command, &args).map_err(|e| e.to_string())?;
