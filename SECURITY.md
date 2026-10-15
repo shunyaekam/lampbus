@@ -13,4 +13,4 @@ Lamp protocols are unauthenticated by design (the iStrip key is shared by every 
 can control a lamp that is not connected to something else.
 
 Report vulnerabilities privately through GitHub's "Report a vulnerability" on this repository's Security tab. Please
-do not open a public issue for them. Expect a first reply within a week.
+do not open a public issue for them.
