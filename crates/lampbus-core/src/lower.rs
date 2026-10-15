@@ -52,6 +52,28 @@ pub(crate) struct Sent {
 }
 
 impl Sent {
+    /// An explicit command is not skipped because the core believes it is already true: the lamp can change on its own
+    /// (its own timers, the vendor app, a power cut), and a skipped "off" would leave it on. Forget only the aspect
+    /// the command is about, so a brightness slider does not resend the whole state.
+    pub(crate) fn forget_power(&mut self) {
+        self.power = None;
+    }
+
+    pub(crate) fn forget_color(&mut self) {
+        self.color = None;
+        self.showing = None;
+    }
+
+    pub(crate) fn forget_level(&mut self) {
+        self.level = None;
+    }
+
+    pub(crate) fn forget_effect(&mut self) {
+        self.effect = None;
+        self.speed = None;
+        self.showing = None;
+    }
+
     pub(crate) fn apply(&mut self, d: &Delta) {
         macro_rules! take {
             ($($f:ident),*) => { $( if d.$f.is_some() { self.$f = d.$f; } )* };

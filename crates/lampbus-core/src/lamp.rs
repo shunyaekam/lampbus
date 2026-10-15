@@ -200,6 +200,24 @@ impl Lamp {
         self.dirty = true;
     }
 
+    /// See [`Sent::forget_power`]: explicit commands are always sent, whatever the core believes.
+    pub(crate) fn forget_for(&mut self, cmd: &crate::Command) {
+        use crate::Command::{Brightness, Color, Effect, Hs, Power};
+        match cmd {
+            Power(_) => self.sent.forget_power(),
+            Color { .. } | Hs { .. } => {
+                self.sent.forget_power();
+                self.sent.forget_color();
+            }
+            Brightness(_) => self.sent.forget_level(),
+            Effect { .. } => {
+                self.sent.forget_power();
+                self.sent.forget_effect();
+            }
+            _ => {}
+        }
+    }
+
     pub(crate) fn power(&mut self, on: bool, now: Ms) {
         if on && !self.look.on {
             if let Some(r) = self.look.anim.as_mut() {

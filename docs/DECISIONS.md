@@ -57,6 +57,14 @@ Short, dated, with the reason. A decision can be reversed; write a new entry ins
   brightness slider sends the same single command we do, and its smooth fades are firmware effects (Fade, Breath),
   which we expose (`effect`). Host-driven animations remain for what the lamp cannot do (30-minute sunrise, candle,
   aurora, live sync) and are bounded by the lamp's brightness resolution. Dithering is off by default (D-evidence in P6).
+- **D22. Explicit commands are never skipped on the strength of belief.** The core used to send nothing when a command
+  matched what it believed the lamp showed. The lamp changes on its own (its timers, the vendor app, a power cut), so
+  a believed-off lamp that was actually on stayed on after `lampbus off` (found live, 2026-10-15, after the lamp's own
+  on-timer fired). Power, colour, brightness and effect commands now forget the belief about their own aspect and
+  are always sent; animations and streams keep the diffing. Cost: one extra frame per repeated command.
+- **D23. The lamp has two clocks we can use.** Command 4 programs the lamp's own on/off times (verified 2026-10-15:
+  off at a clock time, and on, which turns the lamp on at full brightness in the firmware's default white, ignoring
+  `white_balance`). The lamp reports nothing when they fire, so lampbus does not know; D22 limits the damage.
 
 ## Open
 

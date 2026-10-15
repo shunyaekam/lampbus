@@ -475,6 +475,7 @@ impl Core {
         };
         if !matches!(cmd, Command::Raw { .. } | Command::Label(_)) {
             lamp.touched = true;
+            lamp.forget_for(cmd);
         }
         let pct = |v: f64| v.clamp(0.0, 100.0);
         let byte = |v: f64| v.round().clamp(0.0, 255.0) as u8;

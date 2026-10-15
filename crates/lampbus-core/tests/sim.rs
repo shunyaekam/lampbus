@@ -383,7 +383,7 @@ fn govee_brightness_uses_its_own_0_to_255_range() {
 }
 
 #[test]
-fn off_uses_the_off_command_and_is_idempotent() {
+fn off_uses_the_off_command_and_is_sent_again_even_when_the_lamp_is_believed_off() {
     let mut s = Sim::new(vec![dev("elk", "ELK-BLEDOM", "E1")]);
     s.all(color([1.0, 2.0, 3.0], Some(100.0)));
     s.advance(500);
@@ -397,7 +397,12 @@ fn off_uses_the_off_command_and_is_idempotent() {
     let m = s.mark();
     s.all(Command::Power(Some(false)));
     s.advance(500);
-    assert!(s.writes_since(m, "E1").is_empty(), "already off");
+    // the lamp can be switched on by its own timer or the vendor app, so an explicit off is never skipped
+    assert_eq!(
+        s.writes_since(m, "E1"),
+        vec![wire("elk-bledom", "power_off", &[])],
+        "off is sent again"
+    );
 }
 
 #[test]
@@ -483,14 +488,18 @@ fn only_the_newest_command_is_sent_after_a_slow_connect() {
 }
 
 #[test]
-fn unchanged_state_sends_nothing_and_only_changed_parts_are_resent() {
+fn an_explicit_command_is_sent_again_but_only_for_its_own_aspect() {
     let mut s = Sim::new(vec![dev("elk", "ELK-BLEDOM", "E1")]);
     s.all(color([255.0, 0.0, 0.0], Some(100.0)));
     s.advance(1000);
     let m = s.mark();
     s.all(color([255.0, 0.0, 0.0], Some(100.0)));
     s.advance(500);
-    assert!(s.writes_since(m, "E1").is_empty());
+    assert!(
+        !s.writes_since(m, "E1").is_empty(),
+        "the same colour again is still sent: the lamp may have changed on its own"
+    );
+    let m = s.mark();
     s.all(Command::Brightness(40.0));
     s.advance(500);
     assert_eq!(
