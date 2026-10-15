@@ -13,6 +13,7 @@ SSL-E089ED [istrip-ssl] on  40%  rgb(255,147,41)  color  link=ready
 $ lampbus effect rainbow
 $ lampbus preset night-light
 $ lampbus off
+$ lampbus timer on 07:00 off 23:00   # programs the lamp's own clock; works with the computer off
 ```
 
 With no configuration it finds the first lamp it understands. One command takes about a second, including scanning,
@@ -55,6 +56,9 @@ validated against hard limits and never execute code.
   protocol invariants on every action (never write while disconnected, never double-connect, always pace writes).
 - **Open formats:** [definitions](spec/definition-format.md), [animations](spec/animation-format.md),
   [the control language](spec/control-language.md).
+
+The complete list of what the stock iStrip app can make this lamp do, with what is verified on hardware, is in
+[docs/protocols/istrip.md](docs/protocols/istrip.md).
 
 **Installing on an always-on machine** (also written for AI agents): [docs/INSTALL.md](docs/INSTALL.md).
 
