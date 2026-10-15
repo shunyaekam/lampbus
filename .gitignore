@@ -18,3 +18,4 @@ jadx-out/
 fuzz/target/
 fuzz/corpus/
 fuzz/artifacts/
+target-size/
