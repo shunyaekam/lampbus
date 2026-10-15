@@ -2,24 +2,49 @@
 # Install lampbus (and optionally the Matter adapter) as services for the current user.
 # Changes nothing outside your home directory. Review it, or run with --dry-run first.
 #
-#   ./install.sh [--matter] [--dry-run] [--bin-dir DIR]
+#   ./install.sh [--matter] [--dry-run] [--bin-dir DIR] [--uninstall]
 #
 #   --matter      also install lampbus-matter (Apple Home / Google Home / Alexa / Home Assistant)
 #   --dry-run     print what would happen and change nothing
 #   --bin-dir DIR where the built binaries are (default: ./bin, else ../target/release)
+#   --uninstall   stop and remove the services (keeps binaries, token and Matter pairings)
 set -eu
 
-MATTER=0 DRY=0 BINDIR=""
+MATTER=0 DRY=0 UNINSTALL=0 BINDIR=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --matter) MATTER=1 ;;
     --dry-run) DRY=1 ;;
+    --uninstall) UNINSTALL=1 ;;
     --bin-dir) shift; BINDIR=${1:?--bin-dir needs a directory} ;;
-    -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,11p' "$0"; exit 0 ;;
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
   shift
 done
+
+
+run() { if [ "$DRY" = 1 ]; then echo "+ $*"; else "$@"; fi; }
+
+# --uninstall: stop and remove the services. Binaries, the token and Matter pairings are kept.
+if [ "$UNINSTALL" = 1 ]; then
+  case "$(uname -s)" in
+    Linux)
+      for s in lampbus-matter lampbus; do
+        run systemctl --user disable --now "$s" 2>/dev/null || true
+        run rm -f "$HOME/.config/systemd/user/$s.service"
+      done
+      run systemctl --user daemon-reload ;;
+    Darwin)
+      for s in matter serve; do
+        run launchctl bootout "gui/$(id -u)/com.lampbus.$s" 2>/dev/null || true
+        run rm -f "$HOME/Library/LaunchAgents/com.lampbus.$s.plist"
+      done ;;
+    *) echo "unsupported OS: $(uname -s)" >&2; exit 1 ;;
+  esac
+  echo "services removed; kept: ~/.local/bin/lampbus*, ~/.config/lampbus (token, Matter pairings)"
+  exit 0
+fi
 
 HERE=$(cd "$(dirname "$0")" && pwd)
 if [ -z "$BINDIR" ]; then
@@ -28,7 +53,6 @@ fi
 [ -x "${BINDIR:-}/lampbus" ] || { echo "no lampbus binary found; build with: cargo build --release -p lampbus -p lampbus-matter" >&2; exit 1; }
 [ "$MATTER" = 0 ] || [ -x "$BINDIR/lampbus-matter" ] || { echo "no lampbus-matter binary in $BINDIR" >&2; exit 1; }
 
-run() { if [ "$DRY" = 1 ]; then echo "+ $*"; else "$@"; fi; }
 
 run mkdir -p "$HOME/.local/bin" "$HOME/.config/lampbus"
 run install -m 0755 "$BINDIR/lampbus" "$HOME/.local/bin/lampbus"
