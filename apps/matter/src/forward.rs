@@ -10,8 +10,9 @@ use std::io::{Read, Write};
 use std::net::TcpStream;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{channel, RecvTimeoutError, Sender};
-use std::sync::OnceLock;
-use std::time::Duration;
+use std::sync::{Mutex, OnceLock};
+use std::task::{Poll, Waker};
+use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Msg {
@@ -48,6 +49,9 @@ fn send(m: Msg) {
         return;
     }
     if let Some(tx) = TX.get() {
+        if let Ok(mut t) = LAST_SENT.lock() {
+            *t = Some(Instant::now());
+        }
         let _ = tx.send(m);
     }
 }
@@ -131,6 +135,126 @@ pub fn start(addr: String, token: String, device: Option<String>) {
     });
 }
 
+// ---- lamp -> Matter: keep the Matter OnOff state equal to the real lamp ---------------------------------------------
+
+struct Inbox {
+    value: Option<bool>,
+    waker: Option<Waker>,
+}
+
+static INBOX: Mutex<Inbox> = Mutex::new(Inbox {
+    value: None,
+    waker: None,
+});
+static LAST_SENT: Mutex<Option<Instant>> = Mutex::new(None);
+
+fn deliver(on: bool) {
+    if let Ok(mut i) = INBOX.lock() {
+        i.value = Some(on);
+        if let Some(w) = i.waker.take() {
+            w.wake();
+        }
+    }
+}
+
+/// Resolves with the lamp's power state whenever it changes (and once at startup). Used by the OnOff cluster's
+/// out-of-band hook, so the Matter attribute, and therefore Siri and the Home app, never go stale.
+pub async fn lamp_state_change() -> bool {
+    std::future::poll_fn(|cx| {
+        let Ok(mut i) = INBOX.lock() else {
+            return Poll::Pending;
+        };
+        match i.value.take() {
+            Some(v) => Poll::Ready(v),
+            None => {
+                i.waker = Some(cx.waker().clone());
+                Poll::Pending
+            }
+        }
+    })
+    .await
+}
+
+/// FNV-1a: how a long-polling client tells the daemon which state it has already seen (same function as the daemon's).
+pub fn body_hash(b: &[u8]) -> u64 {
+    b.iter().fold(0xcbf2_9ce4_8422_2325, |h, &x| {
+        (h ^ u64::from(x)).wrapping_mul(0x0100_0000_01b3)
+    })
+}
+
+/// Whether the lamp(s) we expose are on, from a `/api/state` body. `device` restricts to one alias.
+pub fn lamp_on(body: &str, device: Option<&str>) -> Option<bool> {
+    let v: Value = serde_json::from_str(body).ok()?;
+    let mut any = None;
+    for l in v.get("lamps")?.as_array()? {
+        if device.is_some_and(|d| l.get("alias").and_then(Value::as_str) != Some(d)) {
+            continue;
+        }
+        any = Some(any.unwrap_or(false) || l.get("on").and_then(Value::as_bool)?);
+    }
+    any
+}
+
+fn get_state(addr: &str, token: &str, wait: Option<u64>) -> Result<String, String> {
+    let mut s =
+        TcpStream::connect(addr).map_err(|e| format!("cannot reach lampbus at {addr}: {e}"))?;
+    s.set_read_timeout(Some(Duration::from_secs(70)))
+        .map_err(|e| e.to_string())?;
+    let q = wait.map_or_else(String::new, |w| format!("?wait={w}"));
+    let req = format!(
+        "GET /api/state{q} HTTP/1.1\r\nHost: {addr}\r\nAuthorization: Bearer {token}\r\nConnection: close\r\n\r\n"
+    );
+    s.write_all(req.as_bytes()).map_err(|e| e.to_string())?;
+    let mut raw = String::new();
+    s.read_to_string(&mut raw).map_err(|e| e.to_string())?;
+    let (head, body) = raw.split_once("\r\n\r\n").ok_or("no response")?;
+    if !head
+        .split_whitespace()
+        .nth(1)
+        .is_some_and(|c| c.starts_with('2'))
+    {
+        return Err(head.lines().next().unwrap_or("bad response").to_string());
+    }
+    Ok(body.to_string())
+}
+
+/// Follow the daemon's state with long polling (no timer: the request returns when something changes, or after 50 s)
+/// and hand power changes to the OnOff cluster. Changes within 1.5 s of a command we forwarded ourselves are
+/// re-examined later, so a half-applied command can never flip the Matter state back.
+pub fn follow(addr: String, token: String, device: Option<String>) {
+    std::thread::spawn(move || {
+        let (mut seen, mut last_on): (Option<u64>, Option<bool>) = (None, None);
+        loop {
+            match get_state(&addr, &token, seen) {
+                Err(_) => {
+                    seen = None;
+                    std::thread::sleep(Duration::from_secs(5));
+                }
+                Ok(body) => {
+                    let quiet = LAST_SENT
+                        .lock()
+                        .ok()
+                        .and_then(|t| *t)
+                        .map_or(Duration::ZERO, |t| {
+                            Duration::from_millis(1500).saturating_sub(t.elapsed())
+                        });
+                    if !quiet.is_zero() {
+                        std::thread::sleep(quiet);
+                        continue;
+                    }
+                    seen = Some(body_hash(body.as_bytes()));
+                    if let Some(on) = lamp_on(&body, device.as_deref()) {
+                        if last_on != Some(on) {
+                            last_on = Some(on);
+                            deliver(on);
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -151,6 +275,22 @@ mod tests {
             v,
             json!({"color": [9, 8, 7], "brightness": 50.0, "power": true, "device": "desk"})
         );
+    }
+
+    #[test]
+    fn lamp_power_is_read_from_the_state_body() {
+        let s = r#"{"lamps":[{"alias":"a","on":false},{"alias":"b","on":true}],"scanning":false}"#;
+        assert_eq!(lamp_on(s, None), Some(true));
+        assert_eq!(lamp_on(s, Some("a")), Some(false));
+        assert_eq!(lamp_on(s, Some("zzz")), None);
+        assert_eq!(lamp_on("{}", None), None);
+        assert_eq!(lamp_on(r#"{"lamps":[]}"#, None), None);
+    }
+
+    #[test]
+    fn the_hash_matches_the_daemons() {
+        // FNV-1a 64 of "a"; the daemon pins the same value in its own test
+        assert_eq!(body_hash(b"a"), 0xaf63_dc4c_8601_ec8c);
     }
 
     #[test]

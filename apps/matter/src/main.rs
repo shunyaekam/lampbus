@@ -21,6 +21,7 @@
 //! and ColorControl commands are forwarded to lampbus through its control language, so Apple Home, Google Home, Alexa
 //! and Home Assistant can drive the lamp.
 #![allow(clippy::uninlined_format_args)]
+#![recursion_limit = "512"] // rs-matter's nested handler types are deep once a hook is async
 
 use core::pin::pin;
 
@@ -121,7 +122,8 @@ fn main() -> Result<(), Error> {
                 .map(|t| t.trim().to_string())
         })
         .unwrap_or_default();
-    forward::start(addr, token, device);
+    forward::start(addr.clone(), token.clone(), device.clone());
+    let (lampbus_addr, forward_token, forward_device) = (addr, token, device);
     let _ = std::fs::create_dir_all(&store_dir);
 
     env_logger::init_from_env(
@@ -231,6 +233,7 @@ fn main() -> Result<(), Error> {
     futures_lite::future::block_on(im.startup())?;
     // the stack has replayed its stored defaults through the hooks by now; from here on, commands are real
     forward::enable();
+    forward::follow(lampbus_addr, forward_token, forward_device);
 
     // Create a default responder capable of handling up to 3 subscriptions
     // All other subscription requests will be turned down with "resource exhausted"
@@ -556,5 +559,15 @@ impl OnOffHooks for OnOffDeviceLogic {
 
     async fn handle_off_with_effect(&self, _effect: on_off::EffectVariantEnum) {
         // no effect
+    }
+
+    // The lamp can be switched without us (lampbus CLI, schedules, the vendor app's timers, another controller):
+    // follow it, without driving it, so Siri and the Home app always act on the real state.
+    async fn run<F: Fn(on_off::OutOfBandMessage)>(&self, notify: F) {
+        loop {
+            let on = forward::lamp_state_change().await;
+            info!("lamp is {}", if on { "on" } else { "off" });
+            notify(on_off::OutOfBandMessage::Update(on));
+        }
     }
 }

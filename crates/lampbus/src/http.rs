@@ -86,9 +86,9 @@ pub async fn serve(ctx: Ctx, definitions: Value, addr: &str, token: String) -> s
     let router = Router::new()
         .route("/", get(|| async { Html(include_str!("ui.html")) }))
         .route("/healthz", get(|| async { Json(json!({"ok": true})) }))
-        .route("/api/state", get(|State(a): Shared| async move {
+        .route("/api/state", get(|State(a): Shared, Query(q): Query<HashMap<String, String>>| async move {
             a.ctx.ensure_lamps(std::time::Duration::from_secs(1)).await;
-            serde_json::to_value(a.ctx.handle.snapshot()).map(Json).map_err(bad)
+            state_body(&a, q.get("wait").and_then(|w| w.parse().ok())).await
         }))
         .route("/api/control", post(|State(a): Shared, b: Bytes| async move {
             control(&a.ctx, &json_body(&b)?).await.map(Json).map_err(bad)
@@ -192,5 +192,45 @@ async fn events_socket(mut ws: WebSocket, app: Arc<App>) {
             r = rx.changed() => if r.is_err() { return },
             m = ws.recv() => if !matches!(m, Some(Ok(_))) { return },
         }
+    }
+}
+
+/// FNV-1a over the response body: how a long-polling client says which state it has already seen.
+pub fn body_hash(b: &[u8]) -> u64 {
+    b.iter().fold(0xcbf2_9ce4_8422_2325, |h, &x| {
+        (h ^ u64::from(x)).wrapping_mul(0x0100_0000_01b3)
+    })
+}
+
+/// The state snapshot. With `wait=<hash of the last body the caller saw>` it holds the request until the state
+/// differs from that (or 50 s pass), so a client can follow the lamp without polling.
+async fn state_body(a: &App, wait: Option<u64>) -> Result<Response, (StatusCode, Json<Value>)> {
+    let mut rx = a.ctx.handle.subscribe();
+    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(50);
+    loop {
+        let body = serde_json::to_value(&*rx.borrow_and_update())
+            .map_err(bad)?
+            .to_string();
+        let changed = wait != Some(body_hash(body.as_bytes()));
+        if changed
+            || tokio::time::timeout_at(deadline, rx.changed())
+                .await
+                .is_err()
+        {
+            return Ok((
+                [(axum::http::header::CONTENT_TYPE, "application/json")],
+                body,
+            )
+                .into_response());
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn the_wait_hash_matches_the_matter_adapter() {
+        // FNV-1a 64 of "a"; apps/matter/src/forward.rs pins the same value
+        assert_eq!(super::body_hash(b"a"), 0xaf63_dc4c_8601_ec8c);
     }
 }
