@@ -1,0 +1,31 @@
+[package]
+name = "lampbus-matter"
+version = "0.0.1"
+description = "Matter adapter: exposes your lamps to Apple Home, Google Home, Alexa and Home Assistant through a running lampbus"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version = "1.87"
+publish = false
+
+[dependencies]
+# pinned to an exact commit: rs-matter's API moves quickly and its latest release predates the colour-light example
+rs-matter = { git = "https://github.com/project-chip/rs-matter", rev = "c69916a5a78957d46500145486df375acf4ab490", features = [
+  "async-io", "groups", "persistent-subscriptions", "max-groups-per-fabric-12", "max-group-keys-per-fabric-3",
+  "max-group-endpoints-per-fabric-3", "max-sessions-32",
+] }
+serde_json = "1"
+log = "0.4"
+env_logger = "0.11"
+embassy-futures = "0.1"
+embassy-time = { version = "0.5", features = ["std"] }
+embassy-time-queue-utils = { version = "0.3", features = ["generic-queue-64"] }
+if-addrs = "0.15"
+async-io = "2"
+futures-lite = "2"
+rand = { version = "0.10", features = ["std", "std_rng", "thread_rng"] }
+async-signal = "0.2"
+socket2 = { version = "0.6", features = ["all"] }
+
+# Derived in part from rs-matter's examples (Apache-2.0), whose macros expand to code the workspace lint policy
+# (which forbids `unsafe`) is not meant to police; the code we wrote ourselves lives in forward.rs and is held to it there.

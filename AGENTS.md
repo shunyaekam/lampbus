@@ -11,7 +11,7 @@ CLI, an HTTP API, or an agent over MCP. Lamps are data (JSON definitions + test 
 are thin. Goal: the cleanest, smallest, cheapest-to-run code that does the job, measured, not claimed.
 
 **Status (2026-10-14): pre-alpha.** Works on the owner's iStrip lamp. Only that definition is hardware-verified; ELK-BLEDOM,
-Triones and Govee are source-verified. No Matter/HomeKit yet. Apps (`apps/screen`, `apps/music`), the web UI, UDP/DDP input and schedules exist but are only unit-tested and smoke-tested, not used in anger.
+Triones and Govee are source-verified. The Matter adapter (`apps/matter`) advertises and starts but is not yet confirmed to pair with Apple Home. Apps (`apps/screen`, `apps/music`), the web UI, UDP/DDP input and schedules exist but are only unit-tested and smoke-tested, not used in anger.
 
 ## Rules (each derived in PRINCIPLES.md)
 

@@ -41,6 +41,13 @@ to a public address.** The UDP inputs are unauthenticated; keep them on localhos
 
 Point screen and music apps at the same machine: `lampbus-screen --to 100.x.y.z:8789`.
 
+## 5. Apple Home, Google Home, Alexa, Home Assistant (Matter)
+
+Run the adapter next to the daemon: `lampbus-matter` (add it to the service the same way). In the Home app choose
+Add Accessory > More options, and enter the setup code it prints (`3497-011-2332` for the built-in test identity).
+Apple Home warns that the accessory is uncertified; that is expected. Pairings are kept in `~/.config/lampbus/matter`.
+You need a home hub (Apple TV or HomePod) for remote access and automations.
+
 ## Checking it works
 
 ```console

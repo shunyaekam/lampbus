@@ -43,9 +43,14 @@ Short, dated, with the reason. A decision can be reversed; write a new entry ins
   automatically when it is running.
 - **D17. Defaults come from the simulator, not guesses.** Behaviour that is easy to get subtly wrong (idle drop,
   backoff, newest-state-wins, holding the last frame of an animation) is pinned by deterministic simulation tests.
+- **D18. Matter is an adapter process, not core code.** `apps/matter` runs rs-matter (pinned to an exact git commit,
+  because its latest release predates the colour-light support) and forwards On/Off, Level and Colour commands to a
+  running `lampbus serve` through the control language, so it adds no semantics (D15). It uses rs-matter's test
+  vendor identity (setup code 3497-011-2332), so Apple Home warns that it is uncertified. Commands are ignored until
+  the Matter stack has finished replaying its stored defaults, which would otherwise switch the lamp on every restart.
 
 ## Open
 
-- Matter spike on `rs-matter`: commission a color light to Apple Home, check hue/saturation/brightness.
+- Matter: confirm pairing and colour/brightness control from Apple Home on a real iPhone; Google Home, Alexa and Home Assistant untested.
 - Agent surface (MCP): depends on how the target agents call tools.
 - Whether one repository holds everything or the spec gets its own.
