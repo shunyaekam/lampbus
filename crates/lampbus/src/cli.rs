@@ -23,6 +23,8 @@ COMMANDS
   save-animation <name> <file>   validate and save an animation spec
   raw <command> [name=value...]  send a protocol command from the lamp's definition
   scan                           find lamps nearby
+  gatt [name] [seconds]          read-only look at a Bluetooth device (services, readable values, announcements); no name lists devices
+  check <definition.json> [vectors.json]   validate a lamp definition and its test vectors (no Bluetooth needed)
   calibrate <brightness|ramp|low>  guided checks to settle open questions about your lamp
   definitions                    lamp families this build understands
   serve                          run the HTTP API (keeps the Bluetooth link, runs animations)
@@ -61,6 +63,14 @@ pub enum Cmd {
         args: Map<String, Value>,
     },
     Scan,
+    Gatt {
+        name: Option<String>,
+        seconds: u64,
+    },
+    Check {
+        definition: PathBuf,
+        vectors: Option<PathBuf>,
+    },
     Calibrate(String),
     Definitions,
     Serve,
@@ -122,6 +132,19 @@ pub fn parse(argv: Vec<String>) -> Result<(Global, Cmd), String> {
         "status" => Cmd::Status,
         "library" => Cmd::Library,
         "scan" => Cmd::Scan,
+        "gatt" => Cmd::Gatt {
+            name: opt(0).map(String::from),
+            seconds: match opt(1) {
+                Some(s) => s
+                    .parse()
+                    .map_err(|_| format!("seconds must be a whole number, not {s:?}"))?,
+                None => 3,
+            },
+        },
+        "check" => Cmd::Check {
+            definition: PathBuf::from(arg(0, "check <definition.json> [vectors.json]")?),
+            vectors: opt(1).map(PathBuf::from),
+        },
         "calibrate" => Cmd::Calibrate(arg(0, "calibrate <brightness|ramp|low>")?.to_string()),
         "definitions" => Cmd::Definitions,
         "serve" => Cmd::Serve,

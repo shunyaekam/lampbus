@@ -4,6 +4,8 @@
 //! events into [`LinkEvent`]s, wakes the core when it asked to be woken, and publishes a [`Snapshot`] whenever
 //! something changes.
 
+pub mod inspect;
+
 use btleplug::api::{
     Central, CentralEvent, Characteristic, Manager as _, Peripheral as _, ScanFilter, WriteType,
 };

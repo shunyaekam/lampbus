@@ -88,6 +88,16 @@ async fn run() -> Result<(), String> {
             println!("lampbus {}", env!("CARGO_PKG_VERSION"));
             return Ok(());
         }
+        Cmd::Check {
+            definition,
+            vectors,
+        } => return check(&definition, vectors.as_deref()),
+        Cmd::Gatt { name, seconds } => {
+            let report =
+                lampbus_shell::inspect::gatt(name.as_deref(), Duration::from_secs(seconds)).await?;
+            print!("{report}");
+            return Ok(());
+        }
         _ => {}
     }
     let settings = config::load(g.config.as_deref())?;
@@ -257,7 +267,13 @@ async fn client(g: &Global, settings: &Settings, cmd: Cmd) -> Result<(), String>
             }
             println!("\n{question}");
         }
-        Cmd::Help | Cmd::Version | Cmd::Definitions | Cmd::Serve | Cmd::Mcp => {}
+        Cmd::Help
+        | Cmd::Version
+        | Cmd::Definitions
+        | Cmd::Serve
+        | Cmd::Mcp
+        | Cmd::Check { .. }
+        | Cmd::Gatt { .. } => {}
     }
     Ok(())
 }
@@ -363,7 +379,72 @@ async fn via_remote(g: &Global, r: &Remote, cmd: Cmd) -> Result<(), String> {
             }
             println!("\n{question}");
         }
-        Cmd::Help | Cmd::Version | Cmd::Definitions | Cmd::Serve | Cmd::Mcp => {}
+        Cmd::Help
+        | Cmd::Version
+        | Cmd::Definitions
+        | Cmd::Serve
+        | Cmd::Mcp
+        | Cmd::Check { .. }
+        | Cmd::Gatt { .. } => {}
     }
     Ok(())
+}
+
+/// `lampbus check`: parse a lamp definition and reproduce its test vectors byte for byte, so a new lamp can be
+/// validated without Bluetooth, a lamp, or a build environment.
+fn check(definition: &std::path::Path, vectors: Option<&std::path::Path>) -> Result<(), String> {
+    let text = std::fs::read_to_string(definition)
+        .map_err(|e| format!("{}: {e}", definition.display()))?;
+    let def = lampbus_defs::Definition::from_json(&text)
+        .map_err(|e| format!("{}: {e}", definition.display()))?;
+    println!(
+        "{}: valid. {} ({}), {} commands, {} effects, status {:?}",
+        definition.display(),
+        def.name,
+        def.id,
+        def.commands.len(),
+        def.effects.len(),
+        def.status
+    );
+    let sibling = definition.with_extension("vectors.json");
+    let path = vectors
+        .map(std::path::Path::to_path_buf)
+        .or_else(|| sibling.exists().then_some(sibling));
+    let Some(path) = path else {
+        println!("no vectors file given or found next to it: add one so others can trust it");
+        return Ok(());
+    };
+    let vecs = lampbus_defs::parse_vectors(
+        &std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?,
+    )
+    .map_err(|e| format!("{}: {e}", path.display()))?;
+    let failures = def.verify_vectors(&vecs);
+    for f in &failures {
+        println!("  vector {} ({}): {}", f.index, f.command, f.reason);
+    }
+    let untested: Vec<&String> = def
+        .commands
+        .keys()
+        .filter(|c| !vecs.iter().any(|v| &v.command == *c))
+        .collect();
+    if !untested.is_empty() {
+        println!(
+            "  commands with no vector: {}",
+            untested
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
+    if failures.is_empty() {
+        println!("{} vectors reproduce exactly.", vecs.len());
+        Ok(())
+    } else {
+        Err(format!(
+            "{} of {} vectors failed",
+            failures.len(),
+            vecs.len()
+        ))
+    }
 }

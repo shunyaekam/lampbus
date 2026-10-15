@@ -1,0 +1,27 @@
+name: Add a lamp
+description: A Bluetooth lamp or LED controller that lampbus does not know yet
+labels: [lamp]
+body:
+  - type: input
+    id: name
+    attributes: {label: "Lamp and where you bought it", placeholder: "ELK-BLEDOM strip, AliExpress"}
+    validations: {required: true}
+  - type: textarea
+    id: gatt
+    attributes:
+      label: "Output of `lampbus gatt <advertised name>`"
+      description: "The name, services and characteristics. Remove nothing; it contains no secrets."
+      render: text
+    validations: {required: true}
+  - type: textarea
+    id: protocol
+    attributes:
+      label: "What you know about the protocol"
+      description: "A link to an existing project, a captured frame (what you did in the app and the bytes), or nothing yet."
+  - type: checkboxes
+    id: help
+    attributes:
+      label: "I can"
+      options:
+        - label: "test frames on the real lamp and report what it does"
+        - label: "write the definition myself (docs/ADD-A-LAMP.md)"

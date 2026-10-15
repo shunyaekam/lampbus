@@ -62,6 +62,8 @@ The complete list of what the stock iStrip app can make this lamp do, with what 
 
 **Installing on an always-on machine** (also written for AI agents): [docs/INSTALL.md](docs/INSTALL.md).
 
+**Add your own lamp** (no Rust needed): [docs/ADD-A-LAMP.md](docs/ADD-A-LAMP.md).
+
 **Contributors and agents:** start with [AGENTS.md](AGENTS.md), then [docs/PRINCIPLES.md](docs/PRINCIPLES.md) for why.
 
 Measured numbers against stated targets are in [docs/SCORECARD.md](docs/SCORECARD.md). Decisions and their reasons
