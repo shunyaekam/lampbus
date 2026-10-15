@@ -461,7 +461,7 @@ impl LevelControlHooks for LevelControlDeviceLogic {
     const MIN_LEVEL: u8 = 1;
     const MAX_LEVEL: u8 = 254;
     const FASTEST_RATE: u8 = 50;
-    const ON_LEVEL: Option<u8> = Some(42);
+    const ON_LEVEL: Option<u8> = None; // turning on keeps the last brightness (the example forces 42)
     const OPTIONS: OptionsBitmap = OptionsBitmap::EXECUTE_IF_OFF;
     const CURRENT_LEVEL: Option<u8> = Some(1);
     const CLUSTER: Cluster<'static> = LEVEL_CONTROL_FULL_CLUSTER

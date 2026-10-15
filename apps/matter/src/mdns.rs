@@ -22,11 +22,20 @@ use rs_matter::{crypto::Crypto, error::Error};
 
 use socket2::{Domain, Protocol, Socket, Type};
 
-/// Run the built-in mDNS responder (advertises the Matter commissioning and operational services).
+/// Advertise the Matter services: through the system's Bonjour on macOS, otherwise with the built-in responder.
 pub async fn run_mdns<C: Crypto>(matter: &Matter<'_>, crypto: C) -> Result<(), Error> {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = &crypto;
+        rs_matter::transport::network::mdns::astro::AstroMdns::new()
+            .run(matter)
+            .await
+    }
+    #[cfg(not(target_os = "macos"))]
     run_builtin_mdns(matter, crypto).await
 }
 
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 async fn run_builtin_mdns<C: Crypto>(matter: &Matter<'_>, crypto: C) -> Result<(), Error> {
     use std::net::UdpSocket;
 
@@ -170,12 +179,16 @@ async fn run_builtin_mdns<C: Crypto>(matter: &Matter<'_>, crypto: C) -> Result<(
         .join_multicast_v6(&MDNS_IPV6_BROADCAST_ADDR, interface)?;
     // macOS refuses an IPv4 multicast join on a dual-stack IPv6 socket (EINVAL). Discovery then runs over IPv6 only,
     // which is enough on any dual-stack network; Linux accepts the join and keeps both.
-    if let Err(e) = socket
+    let ipv4_ok = match socket
         .get_ref()
         .join_multicast_v4(&MDNS_IPV4_BROADCAST_ADDR, &ipv4_addr)
     {
-        warn!("IPv4 mDNS multicast join failed ({e}); advertising over IPv6 only");
-    }
+        Ok(()) => true,
+        Err(e) => {
+            warn!("IPv4 mDNS multicast join failed ({e}); advertising over IPv6 only");
+            false
+        }
+    };
 
     BuiltinMdns::new()
         .run(
@@ -186,7 +199,7 @@ async fn run_builtin_mdns<C: Crypto>(matter: &Matter<'_>, crypto: C) -> Result<(
                 ip: ipv4_addr,
                 ipv6: &ipv6_addrs,
             },
-            Some(ipv4_addr),
+            ipv4_ok.then_some(ipv4_addr),
             Some(interface),
             matter,
             crypto,

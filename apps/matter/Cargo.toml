@@ -27,5 +27,10 @@ rand = { version = "0.10", features = ["std", "std_rng", "thread_rng"] }
 async-signal = "0.2"
 socket2 = { version = "0.6", features = ["all"] }
 
+# On macOS, register with the system's own mDNS service (Bonjour): it handles IPv4, IPv6 and the discriminator
+# subtypes that Apple Home searches by, which rs-matter's built-in responder does not publish.
+[target.'cfg(target_os = "macos")'.dependencies]
+rs-matter = { git = "https://github.com/project-chip/rs-matter", rev = "c69916a5a78957d46500145486df375acf4ab490", features = ["astro-dnssd"] }
+
 # Derived in part from rs-matter's examples (Apache-2.0), whose macros expand to code the workspace lint policy
 # (which forbids `unsafe`) is not meant to police; the code we wrote ourselves lives in forward.rs and is held to it there.
