@@ -196,5 +196,87 @@
     },
     "plain": "54520057060164000000000000000000",
     "wire": "9f8b1c046099b12b3d53878020f15e79"
+  },
+  {
+    "command": "color",
+    "args": {
+      "r": 255,
+      "g": 147,
+      "b": 41,
+      "type": 1
+    },
+    "plain": "54520057020100ff9329646401000000",
+    "wire": "6085d82f0aba770302089b5d57d27974"
+  },
+  {
+    "command": "color",
+    "args": {
+      "r": 255,
+      "g": 147,
+      "b": 41,
+      "type": 2
+    },
+    "plain": "54520057020100ff9329646402000000",
+    "wire": "028518a85fca2b41821f7cbe99d894bf"
+  },
+  {
+    "command": "group",
+    "args": {
+      "group": 1
+    },
+    "plain": "54520057010100000000000000000000",
+    "wire": "814070cf48ab60e4b8079d5e273c78a0"
+  },
+  {
+    "command": "group",
+    "args": {
+      "group": 7
+    },
+    "plain": "54520057010700000000000000000000",
+    "wire": "afefee2152822a9d13dea69e6012f263"
+  },
+  {
+    "command": "rhythm",
+    "args": {
+      "status": 1,
+      "fft": 200,
+      "sensitivity": 80,
+      "group": 2
+    },
+    "plain": "54520057030201c85000000000000000",
+    "wire": "1fae533374e663aa73e067d57a606f85"
+  },
+  {
+    "command": "timer",
+    "args": {
+      "flags": 49,
+      "hour": 22,
+      "minute": 30,
+      "second": 5,
+      "on_week": 0,
+      "on_hour": 7,
+      "on_minute": 0,
+      "off_week": 0,
+      "off_hour": 23,
+      "off_minute": 15
+    },
+    "plain": "54520057040131161e0500070000170f",
+    "wire": "36877bd6c6e7c446561a996c937a5cbd"
+  },
+  {
+    "command": "line_order",
+    "args": {
+      "order": 0
+    },
+    "plain": "54520057050100000000000000000000",
+    "wire": "841fce4cebc9d2701642414464f5c251"
+  },
+  {
+    "command": "line_order",
+    "args": {
+      "order": 5
+    },
+    "plain": "54520057050105000000000000000000",
+    "wire": "edeb56e782554482cac82cc04e429d3e"
   }
 ]

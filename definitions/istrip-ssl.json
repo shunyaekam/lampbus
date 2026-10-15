@@ -18,8 +18,9 @@
   "commands": {
     "color": {
       "params": { "group": {"min": 0, "max": 255, "default": 1}, "r": {}, "g": {}, "b": {},
-                  "brightness": {"min": 0, "max": 100, "default": 100}, "speed": {"min": 1, "max": 100, "default": 100} },
-      "frame": [84, 82, 0, 87, 2, "$group", 0, "$r", "$g", "$b", "$brightness", "$speed", 0],
+                  "brightness": {"min": 0, "max": 100, "default": 100}, "speed": {"min": 1, "max": 100, "default": 100},
+                  "type": {"min": 0, "max": 2, "default": 0} },
+      "frame": [84, 82, 0, 87, 2, "$group", 0, "$r", "$g", "$b", "$brightness", "$speed", "$type"],
       "pad_to": 16
     },
     "off": {
@@ -43,11 +44,33 @@
       "params": { "group": {"min": 0, "max": 255, "default": 1}, "value": {"min": 1, "max": 100} },
       "frame": [84, 82, 0, 87, 6, "$group", "$value"],
       "pad_to": 16
+    },
+    "group": {
+      "params": { "group": {"min": 1, "max": 255, "default": 1} },
+      "frame": [84, 82, 0, 87, 1, "$group"],
+      "pad_to": 16
+    },
+    "rhythm": {
+      "params": { "group": {"min": 0, "max": 255, "default": 1}, "status": {"min": 0, "max": 6}, "fft": {}, "sensitivity": {"min": 0, "max": 100, "default": 50} },
+      "frame": [84, 82, 0, 87, 3, "$group", "$status", "$fft", "$sensitivity"],
+      "pad_to": 16
+    },
+    "timer": {
+      "params": { "group": {"min": 0, "max": 255, "default": 1}, "flags": {}, "hour": {"max": 23}, "minute": {"max": 59}, "second": {"max": 59},
+                  "on_week": {}, "on_hour": {"max": 23}, "on_minute": {"max": 59}, "off_week": {}, "off_hour": {"max": 23}, "off_minute": {"max": 59} },
+      "frame": [84, 82, 0, 87, 4, "$group", "$flags", "$hour", "$minute", "$second", "$on_week", "$on_hour", "$on_minute", "$off_week", "$off_hour", "$off_minute"],
+      "pad_to": 16
+    },
+    "line_order": {
+      "params": { "group": {"min": 0, "max": 255, "default": 1}, "order": {"min": 0, "max": 5} },
+      "frame": [84, 82, 0, 87, 5, "$group", "$order"],
+      "pad_to": 16
     }
   },
   "wire": [ { "op": "aes-128-ecb", "key": "34522a5b7a6e492c08090a9d8d2a23f8" } ],
   "sources": [
     "decoded from the vendor Android app v1.4.3 and verified on an SSL-E089ED lamp",
+    "commands group, rhythm, timer and line_order are decoded from the app (BleProtocol, BleDataAgreement) but not yet verified on hardware; the colour type byte (1 white, 2 colour temperature in the app) showed no visible effect on an SSL-E089ED in two tests (2026-10-15, one confounded), so it is probably for RGBW strips",
     "https://github.com/vakintosh/istrip_plus_HA (docs/ble-protocol.md)",
     "https://github.com/gsp8181/ha-istrip-lamp-esphome (ISTRIP_PROTOCOL.md)"
   ]

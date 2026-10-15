@@ -127,6 +127,43 @@ mod istrip {
                 frame(6, 1, &[value]),
             );
         }
+        // decoded from the app, not yet checked on hardware: colour type byte, group, rhythm, timer, line order
+        for ty in [1u8, 2] {
+            add(
+                &mut v,
+                "color",
+                json!({"r": 255, "g": 147, "b": 41, "type": ty}),
+                frame(2, 1, &[0, 255, 147, 41, 100, 100, ty]),
+            );
+        }
+        for group in [1u8, 7] {
+            add(
+                &mut v,
+                "group",
+                json!({"group": group}),
+                frame(1, group, &[]),
+            );
+        }
+        add(
+            &mut v,
+            "rhythm",
+            json!({"status": 1, "fft": 200, "sensitivity": 80, "group": 2}),
+            frame(3, 2, &[1, 200, 80]),
+        );
+        add(
+            &mut v,
+            "timer",
+            json!({"flags": 49, "hour": 22, "minute": 30, "second": 5, "on_week": 0, "on_hour": 7, "on_minute": 0, "off_week": 0, "off_hour": 23, "off_minute": 15}),
+            frame(4, 1, &[49, 22, 30, 5, 0, 7, 0, 0, 23, 15]),
+        );
+        for order in [0u8, 5] {
+            add(
+                &mut v,
+                "line_order",
+                json!({"order": order}),
+                frame(5, 1, &[order]),
+            );
+        }
         v
     }
 }
