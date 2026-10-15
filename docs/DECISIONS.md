@@ -53,6 +53,10 @@ Short, dated, with the reason. A decision can be reversed; write a new entry ins
   excluded from the workspace and wired in with `[patch.crates-io]`. Remove it if upstream adopts a wake-on-shutdown design.
 - **D20. Dependencies are audited in CI.** `cargo deny check` enforces permissive licences, no known vulnerabilities, only
   crates.io plus the one pinned rs-matter commit, and flags unmaintained crates. An acknowledged advisory needs a reason in `deny.toml`.
+- **D21. The lamp's own effects are the right tool for continuous fades.** The stock app has no software fading: its
+  brightness slider sends the same single command we do, and its smooth fades are firmware effects (Fade, Breath),
+  which we expose (`effect`). Host-driven animations remain for what the lamp cannot do (30-minute sunrise, candle,
+  aurora, live sync) and are bounded by the lamp's brightness resolution. Dithering is off by default (D-evidence in P6).
 
 ## Open
 

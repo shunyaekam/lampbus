@@ -219,6 +219,15 @@ impl Sim {
             }
             self.core.handle_timeout(self.now);
             self.drain();
+            // I4: once everything due has been handled, the next wake-up is in the future. A deadline at or before
+            // `now` that never moves would make a real shell spin at full CPU.
+            if let Some(next) = self.core.poll_timeout(self.now) {
+                assert!(
+                    next > self.now || !self.pending.is_empty(),
+                    "stuck wake-up at {next} while now = {}",
+                    self.now
+                );
+            }
         }
         self.now = self.now.max(t);
         self.core.handle_timeout(self.now);
@@ -531,6 +540,8 @@ fn raw_commands_bypass_the_state_tracking() {
 fn connect_failures_back_off_exponentially_then_succeed() {
     let mut s = Sim::new(vec![dev("lamp", "SSL-E089ED", "S1")]);
     s.fail_connects = 3;
+    // each failed connect drops the (possibly stale) handle, so the lamp is found again by scanning
+    s.adverts = vec![("S1".into(), Some("SSL-E089ED".into()), vec![])];
     s.all(color([1.0, 2.0, 3.0], None));
     s.advance(30_000);
     let connects: Vec<Ms> = s
@@ -541,8 +552,8 @@ fn connect_failures_back_off_exponentially_then_succeed() {
         .collect();
     assert_eq!(connects.len(), 4, "{connects:?}");
     let gaps: Vec<Ms> = connects.windows(2).map(|w| w[1] - w[0]).collect();
-    // each gap = connect delay (200) + backoff (1s, 2s, 4s)
-    assert_eq!(gaps, vec![1_200, 2_200, 4_200]);
+    // each gap = connect delay (200) + backoff (1 s, 2 s, 4 s) + the 50 ms scan before the retry
+    assert_eq!(gaps, vec![1_250, 2_250, 4_250]);
     assert_eq!(
         s.writes("S1").len(),
         1,
@@ -842,7 +853,11 @@ fn streams_are_ignored_while_the_lamp_is_off() {
 #[test]
 fn dithering_shows_levels_between_the_lamps_brightness_steps() {
     // a very slow fade between 0% and 2.5% of master: the lamp has 100 steps, so most of the range lies between steps
-    let mut s = Sim::new(vec![dev("lamp", "SSL-E089ED", "S1")]);
+    let mut s = Sim::with(Config {
+        devices: vec![dev("lamp", "SSL-E089ED", "S1")],
+        dither: true,
+        ..Config::default()
+    });
     s.all(Command::Play {
         animation: animation(
             json!({"type":"keyframes","duration":20,"fps":20,"then":"hold",
@@ -993,5 +1008,55 @@ fn stopping_an_animation_freezes_what_it_is_showing() {
         s.writes("E1").len(),
         before,
         "nothing changes after the freeze"
+    );
+}
+
+#[test]
+fn a_stale_device_handle_is_rediscovered_by_name() {
+    // the platform invalidated the handle ("Peripheral no longer available"): connecting to S1 fails, but a scan
+    // finds the same lamp under a fresh id
+    let mut s = Sim::new(vec![dev("lamp", "SSL-E089ED", "S1")]);
+    s.fail_connects = 1;
+    s.adverts = vec![("S2".into(), Some("SSL-E089ED".into()), vec![])];
+    s.all(color([5.0, 6.0, 7.0], None));
+    s.advance(20_000);
+    assert_eq!(
+        s.count(|e| matches!(e, Ev::Connect(d) if d == "S1")),
+        1,
+        "tried the old handle once"
+    );
+    assert!(
+        s.count(|e| matches!(e, Ev::Scan)) >= 1,
+        "then searched again"
+    );
+    assert!(
+        s.count(|e| matches!(e, Ev::Connect(d) if d == "S2")) >= 1,
+        "and used the fresh handle"
+    );
+    assert_eq!(
+        s.writes("S2"),
+        vec![wire(ISTRIP, "color", &[("r", 5.0), ("g", 6.0), ("b", 7.0)])]
+    );
+    let snap = s.core.snapshot(s.now);
+    assert!(snap.lamps[0].connected && snap.lamps[0].id.as_deref() == Some("S2"));
+}
+
+#[test]
+fn an_adopted_lamp_is_also_rediscovered() {
+    let mut s = Sim::with(Config {
+        auto_adopt: true,
+        ..Config::default()
+    });
+    s.adverts = vec![("A1".into(), Some("ELK-BLEDOM".into()), vec![])];
+    s.core.discover(s.now);
+    s.drain();
+    s.advance(20_000); // let the first scan finish, so the second one starts fresh
+    s.fail_connects = 1;
+    s.adverts = vec![("A2".into(), Some("ELK-BLEDOM".into()), vec![])];
+    s.all(color([1.0, 2.0, 3.0], None));
+    s.advance(30_000);
+    assert!(
+        s.count(|e| matches!(e, Ev::Connect(d) if d == "A2")) >= 1,
+        "re-found under a new id"
     );
 }

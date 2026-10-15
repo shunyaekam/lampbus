@@ -446,7 +446,8 @@ impl Lamp {
         let write = (self.link == Link::Ready && !self.nothing_queued())
             .then(|| self.next_write_at.max(now));
         let link = match self.link {
-            Link::Backoff { until } if self.wants_link(now) => Some(until),
+            // once the back-off has elapsed there is nothing to wake for: the lamp waits for a scan result, not for time
+            Link::Backoff { until } if until > now && self.wants_link(now) => Some(until),
             Link::Connecting { since } => Some(since + cfg.connect_timeout_ms),
             _ => None,
         };

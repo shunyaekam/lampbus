@@ -77,7 +77,8 @@ pub struct Config {
     pub color_gamma: f64,
     /// Brightness curve.
     pub level_curve: LevelCurve,
-    /// Temporal dithering for animations and streams.
+    /// Temporal dithering for animations and streams. Off by default: alternating adjacent levels flickers visibly
+    /// where one step is a large fraction of the level (the dim end).
     pub dither: bool,
     /// Smoothing time constant when a streamed value rises.
     pub stream_attack_ms: f64,
@@ -97,7 +98,7 @@ impl Default for Config {
             scan_timeout_ms: 15_000,
             color_gamma: 1.0,
             level_curve: LevelCurve::Linear,
-            dither: true,
+            dither: false, // off by default: at the dim end it flickers visibly at 20 updates/s (owner's lamp, 2026-10-15)
             stream_attack_ms: 30.0,
             stream_release_ms: 150.0,
         }
@@ -597,6 +598,11 @@ impl Core {
             }
             LinkEvent::ConnectFailed { id, reason } => {
                 if let Some(l) = self.lamp_by_id(&id) {
+                    // A lamp we can find by name may have a stale platform handle (macOS invalidates peripherals,
+                    // BlueZ may re-create them): forget the id so the next attempt scans and binds the fresh one.
+                    if l.bind_name.is_some() {
+                        l.id = None;
+                    }
                     l.link_down(now, Some(reason), true);
                 }
             }
@@ -650,8 +656,9 @@ impl Core {
                     .iter()
                     .any(|l| l.alias.eq_ignore_ascii_case(&alias))
                 {
-                    self.lamps
-                        .push(Lamp::new(Some(id), alias, Arc::clone(def), &self.cfg));
+                    let mut lamp = Lamp::new(Some(id), alias, Arc::clone(def), &self.cfg);
+                    lamp.bind_name = name.clone(); // so a stale handle can be re-found by name
+                    self.lamps.push(lamp);
                 }
             }
         }

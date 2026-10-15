@@ -147,7 +147,7 @@ else L\*/903.3, so L\* = 50 is Y = 0.184 (tested: `lightness_to_luminance`).
 Σ q_t = Σ v_t + e_0 − e_N, so **|mean(q) − mean(v)| ≤ 1/N [DERIVED]**: over a window of N frames the effective step
 shrinks from Δ to Δ/N (about 20× finer over one second at 20 fps). The error is clamped to [−1, 1] so a saturated channel
 cannot wind up. This only helps if frames arrive faster than the eye resolves flicker, so it is applied to animations and
-streams and *never* to static colours **[ASSUMPTION: fusion above roughly 20 updates/s; the owner judged 20 and 40 smooth]**.
+streams and *never* to static colours. **[MEASURED 2026-10-15, owner's lamp: the assumption fails at the dim end.]** Alternating levels 0 and 1 at 20 updates/s is a 100 % modulation and flickers visibly, so dithering is **off by default** (`dither` in the config) and should only be enabled where one step is a small fraction of the level.
 
 *Smoothing.* y ← y + α(x − y), α = 1 − e^(−Δt/τ), exact for irregular Δt, with τ = 30 ms when x rises and 150 ms when it
 falls (defaults): quick to respond, slow to flicker.
@@ -242,8 +242,8 @@ actively maintained **[OWNER]**.
 
 | # | Assumption | How to settle it |
 |---|---|---|
-| A1 | iStrip brightness is 0-100. Another project documents 0-64. | Send 64 then 100; if they look identical, cap the range in the definition. |
-| A2 | The lamp's response is close to linear duty, so `color_gamma` = 1. | Eyeball a ramp at gamma 1.0 / 1.8 / 2.2; record the winner. |
-| A3 | Flicker fusion is fast enough that dithering is invisible at 20 updates/s. | Run a sunrise at low levels and look. |
+| A1 | iStrip brightness is 0-100. Another project documents 0-64. | **Settled 2026-10-15:** 100% is visibly brighter than 64%, so the range is 0-100. Also measured at 50%: a 1-level step is invisible and 2 levels or more are visible. |
+| A2 | The lamp's response is close to linear duty, so `color_gamma` = 1. | Open. A linear 20 s fade looked "discrete" with visible steps throughout; a perceptual curve (B) looked slightly less stepped at the top but flickered at the bottom. Not resolved; fast fades are a stress case, not real use. |
+| A3 | Flicker fusion is fast enough that dithering is invisible at 20 updates/s. | **Falsified 2026-10-15** at the dim end (see P6). Dithering is off by default. |
 | A4 | Some iStrip firmware needs a one-time "join group" command; the owner's lamp did not. | Test on another unit, or ask a user whose lamp ignores commands. |
 | A5 | The 2-second stream timeout suits screen sync. | Measure with a real screen-sync app. |

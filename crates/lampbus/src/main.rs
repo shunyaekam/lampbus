@@ -277,10 +277,48 @@ fn library_text(lib: &Library) -> String {
     out.trim_end().to_string()
 }
 
+/// After sending commands to a running daemon, wait until the lamp has really received them: nothing pending and no
+/// error. A link stuck in back-off is reported as a failure, never as success.
+async fn confirmed(r: &Remote, limit: Duration) -> Result<(), String> {
+    let deadline = std::time::Instant::now() + limit;
+    loop {
+        let state = r.call("GET", "/api/state", None).await?;
+        let lamps = state
+            .get("lamps")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+        let problem = lamps.iter().find_map(|l| {
+            let pending = l.get("pending").and_then(Value::as_u64).unwrap_or(0);
+            let link = l.get("link").and_then(Value::as_str).unwrap_or("");
+            let err = l.get("last_error").and_then(Value::as_str);
+            let settled = pending == 0 && err.is_none() && (link == "ready" || link == "down");
+            (!settled).then(|| {
+                format!(
+                    "{} is {link} ({})",
+                    l.get("alias").and_then(Value::as_str).unwrap_or("lamp"),
+                    err.unwrap_or("still sending")
+                )
+            })
+        });
+        match problem {
+            None => return Ok(()),
+            Some(p) if std::time::Instant::now() >= deadline => {
+                return Err(format!("the lamp did not confirm: {p}"))
+            }
+            Some(_) => tokio::time::sleep(Duration::from_millis(250)).await,
+        }
+    }
+}
+
 async fn via_remote(g: &Global, r: &Remote, cmd: Cmd) -> Result<(), String> {
     match cmd {
         Cmd::Status | Cmd::Scan => show(&r.call("GET", "/api/state", None).await?, g.json),
-        Cmd::Control(args) => show(&r.call("POST", "/api/control", Some(&args)).await?, g.json),
+        Cmd::Control(args) => {
+            let state = r.call("POST", "/api/control", Some(&args)).await?;
+            confirmed(r, Duration::from_secs(30)).await?;
+            show(&state, g.json);
+        }
         Cmd::Library => {
             let v = r.call("GET", "/api/library", None).await?;
             let mut out = String::new();
@@ -318,6 +356,8 @@ async fn via_remote(g: &Global, r: &Remote, cmd: Cmd) -> Result<(), String> {
             for st in steps {
                 println!("-> {}", st.say);
                 r.call("POST", "/api/control", Some(&st.control)).await?;
+                confirmed(r, Duration::from_secs(30)).await?;
+                println!("   (the lamp confirmed; look now for {} s)", st.seconds);
                 tokio::time::sleep(Duration::from_secs(st.seconds)).await;
             }
             println!("\n{question}");

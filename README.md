@@ -73,7 +73,7 @@ Optional: `~/.config/lampbus/config.json`.
  "bind": "127.0.0.1:8787",
  "definitions_dir": "~/.config/lampbus/definitions",
  "library_dir": "~/.config/lampbus/library",
- "color_gamma": 1.0, "level_curve": "linear", "dither": true}
+ "color_gamma": 1.0, "level_curve": "linear", "dither": false}
 ```
 
 The API token is created on first use in `~/.config/lampbus/token` (mode 0600). Bind to a Tailscale address to reach
