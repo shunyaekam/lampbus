@@ -1060,3 +1060,29 @@ fn an_adopted_lamp_is_also_rediscovered() {
         "re-found under a new id"
     );
 }
+
+#[test]
+fn effect_errors_list_what_is_valid_and_common_aliases_work() {
+    let mut s = Sim::new(vec![dev("lamp", "SSL-E089ED", "S1")]);
+    let eff = |e: &str| Command::Effect {
+        effect: e.into(),
+        speed: None,
+        brightness: None,
+    };
+    let Err(Error::Bad(msg)) = s.cmd(&Target::All, eff("sparkle")) else {
+        panic!("expected an error")
+    };
+    assert!(
+        msg.contains("Breath7") && msg.contains("breathe") && msg.contains("Flash7"),
+        "{msg}"
+    );
+    for (name, id) in [("breathe", 5.0), ("fade", 1.0), ("flash", 9.0)] {
+        s.cmd(&Target::All, eff(name)).unwrap();
+        s.advance(500);
+        assert_eq!(
+            s.writes("S1").last().unwrap(),
+            &wire(ISTRIP, "effect", &[("mode", id)]),
+            "{name}"
+        );
+    }
+}

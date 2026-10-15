@@ -531,7 +531,24 @@ impl Core {
                     })
                     .filter(|id| (ec.mode.min..=ec.mode.max).contains(&f64::from(*id)))
                     .ok_or_else(|| {
-                        Error::Bad(format!("{} has no effect {effect:?}", lamp.alias))
+                        // list what is valid, so the next attempt can be right
+                        let names: Vec<String> = lamp
+                            .def
+                            .effects
+                            .iter()
+                            .map(|e| {
+                                let alias = e
+                                    .aliases
+                                    .first()
+                                    .map_or(String::new(), |a| format!(" / {a}"));
+                                format!("{} ({}{alias})", e.name, e.id)
+                            })
+                            .collect();
+                        Error::Bad(format!(
+                            "{} has no effect {effect:?}; available: {}",
+                            lamp.alias,
+                            names.join(", ")
+                        ))
                     })?;
                 lamp.stop_animation();
                 let speed = speed
