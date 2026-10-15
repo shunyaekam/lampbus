@@ -98,7 +98,7 @@ pub fn due(entries: &[Entry], now: Clock) -> Vec<usize> {
         .collect()
 }
 
-async fn local_clock() -> Option<Clock> {
+pub async fn local_clock() -> Option<Clock> {
     let out = tokio::task::spawn_blocking(|| {
         std::process::Command::new("date")
             .arg("+%u %H %M %S")

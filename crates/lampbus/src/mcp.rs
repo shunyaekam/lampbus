@@ -33,6 +33,7 @@ fn tools() -> Value {
                     "brightness": {"type": "number", "description": "0-100"},
                     "speed": {"type": "number", "description": "0-100, for effects"},
                     "stop_animation": {"type": "boolean"},
+                    "timer": {"description": "The lamp's own daily clock: {\"on\": \"07:00\", \"off\": \"23:00\"} (either optional) or \"clear\". Works with the computer off.", "oneOf": [{"type": "object"}, {"type": "string", "enum": ["clear"]}]},
                     "power": {"description": "true, false or \"toggle\"", "oneOf": [{"type": "boolean"}, {"type": "string", "enum": ["toggle"]}]}
                 }
             }

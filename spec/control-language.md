@@ -25,6 +25,7 @@ can be replayed through another.
 | `speed` | `0-100`, for effects. |
 | `stop_animation` | `true` stops the animation and keeps the lamp's static colour. |
 | `power` | `true`, `false` or `"toggle"`. Applied last, so `{"color": "red", "power": false}` ends off. |
+| `timer` | `{"on": "07:00", "off": "23:00"}` (either may be left out) or `"clear"`. Programs the lamp's **own** daily clock, so it keeps working with the computer off; only for lamps whose definition has a `timer` command. With `lampbus serve` running, the same change is applied to lampbus's own idea of the lamp at that time (the lamp reports nothing when its timer fires). On: the lamp's firmware default (full white) then lampbus sets white. May be given alone. |
 
 Rules, deliberately strict so that an agent's typo is reported and never guessed at:
 

@@ -18,6 +18,7 @@ COMMANDS
   anim <name> [brightness]       play an animation (needs `lampbus serve`, or --hold)
   stop                           stop the animation
   preset <name>                  apply a preset
+  timer on 07:00 off 23:00        program the lamp's own daily clock (works with the computer off); `timer clear`
   library                        list animations and presets
   save-animation <name> <file>   validate and save an animation spec
   raw <command> [name=value...]  send a protocol command from the lamp's definition
@@ -183,6 +184,29 @@ pub fn parse(argv: Vec<String>) -> Result<(Global, Cmd), String> {
             if let Some(b) = opt(1) {
                 ctl.insert("brightness".into(), number(b, "brightness")?);
             }
+            Cmd::Control(Value::Object(ctl))
+        }
+        "timer" => {
+            let usage = "timer clear | timer [on HH:MM] [off HH:MM]";
+            let spec = if opt(0) == Some("clear") {
+                json!("clear")
+            } else {
+                let mut t = Map::new();
+                let mut i = 0;
+                while i < a.len() {
+                    let key = arg(i, usage)?;
+                    if key != "on" && key != "off" {
+                        return Err(format!("usage: lampbus {usage}"));
+                    }
+                    t.insert(key.into(), json!(arg(i + 1, usage)?));
+                    i += 2;
+                }
+                if t.is_empty() {
+                    return Err(format!("usage: lampbus {usage}"));
+                }
+                Value::Object(t)
+            };
+            ctl.insert("timer".into(), spec);
             Cmd::Control(Value::Object(ctl))
         }
         "stop" => {
@@ -378,6 +402,21 @@ mod tests {
         }
         assert!(matches!(p("").unwrap().1, Cmd::Help));
         assert!(matches!(p("--help").unwrap().1, Cmd::Help));
+    }
+
+    #[test]
+    fn timer_arguments() {
+        let Cmd::Control(v) = p("timer on 07:00 off 23:00").unwrap().1 else {
+            panic!("expected a control")
+        };
+        assert_eq!(v, json!({"timer": {"on": "07:00", "off": "23:00"}}));
+        let Cmd::Control(v) = p("timer clear").unwrap().1 else {
+            panic!("expected a control")
+        };
+        assert_eq!(v, json!({"timer": "clear"}));
+        for bad in ["timer", "timer on", "timer at 07:00"] {
+            assert!(p(bad).is_err(), "{bad}");
+        }
     }
 
     #[test]

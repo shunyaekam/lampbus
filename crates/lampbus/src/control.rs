@@ -18,9 +18,10 @@ use lampbus_core::{Command, Target};
 use lampbus_render::{anim, color};
 use lampbus_shell::Handle;
 use serde_json::Value;
+use std::collections::HashMap;
 use std::sync::Arc;
 
-const KEYS: [&str; 12] = [
+const KEYS: [&str; 13] = [
     "device",
     "preset",
     "color",
@@ -33,6 +34,7 @@ const KEYS: [&str; 12] = [
     "stop_animation",
     "power",
     "label",
+    "timer",
 ];
 
 #[derive(Clone)]
@@ -41,7 +43,13 @@ pub struct Ctx {
     pub library: Library,
     /// With no lamps configured: scan for the first matching lamp before acting.
     pub auto_discover: bool,
+    /// Shadow tasks of the lamps' own timers, so what lampbus believes follows what the lamp will do by itself.
+    pub timers: Timers,
 }
+
+/// Running shadow tasks, by target.
+#[derive(Clone, Default)]
+pub struct Timers(Arc<std::sync::Mutex<HashMap<String, Vec<tokio::task::JoinHandle<()>>>>>);
 
 impl Ctx {
     /// Make sure at least one lamp is known, scanning for up to `limit` if configured to.
@@ -144,14 +152,17 @@ pub fn commands(library: &Library, args: &Value) -> Result<(Target, Vec<Command>
     if let Some(l) = obj.get("label").and_then(Value::as_str) {
         cmds.push(Command::Label(Some(l.to_string())));
     }
+    if cmds.is_empty() && obj.contains_key("timer") {
+        return Ok((target, cmds)); // a timer alone is handled by `control`
+    }
     if cmds.is_empty() {
-        return Err("nothing to do: give at least one of preset, color, hue, effect, animation, brightness, power, stop_animation".into());
+        return Err("nothing to do: give at least one of preset, color, hue, effect, animation, brightness, power, stop_animation, timer".into());
     }
     Ok((target, cmds))
 }
 
-/// Apply a control object and return the resulting state.
-pub async fn control(ctx: &Ctx, args: &Value) -> Result<Value, String> {
+/// Apply the lamp commands of a control object (no timers: a timer task calls this, and must not recurse into `control`).
+async fn apply(ctx: &Ctx, args: &Value) -> Result<Target, String> {
     let (target, cmds) = commands(&ctx.library, args)?;
     ctx.ensure_lamps(std::time::Duration::from_secs(12)).await;
     for c in cmds {
@@ -160,7 +171,115 @@ pub async fn control(ctx: &Ctx, args: &Value) -> Result<Value, String> {
             .await
             .map_err(|e| e.to_string())?;
     }
+    Ok(target)
+}
+
+/// Apply a control object and return the resulting state.
+pub async fn control(ctx: &Ctx, args: &Value) -> Result<Value, String> {
+    let target = apply(ctx, args).await?;
+    if let Some(t) = args.get("timer") {
+        set_timer(ctx, &target, t).await?;
+    }
     serde_json::to_value(ctx.handle.snapshot()).map_err(|e| e.to_string())
+}
+
+/// `"timer": "clear"` or `{"on": "07:00", "off": "23:00"}` (either may be missing): minutes since midnight.
+pub fn parse_timer(v: &Value) -> Result<(Option<u32>, Option<u32>), String> {
+    if v.as_str() == Some("clear") {
+        return Ok((None, None));
+    }
+    let o = v
+        .as_object()
+        .ok_or("timer must be \"clear\" or {\"on\": \"07:00\", \"off\": \"23:00\"}")?;
+    if let Some(k) = o.keys().find(|k| *k != "on" && *k != "off") {
+        return Err(format!("unknown timer field {k:?}; use on and off"));
+    }
+    let at = |k: &str| match o.get(k) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(s)) => crate::schedule::parse_time(s).map(Some),
+        Some(_) => Err(format!("timer {k} must be a time like \"07:30\"")),
+    };
+    let (on, off) = (at("on")?, at("off")?);
+    if on.is_none() && off.is_none() {
+        return Err("give an on time, an off time, or \"clear\"".into());
+    }
+    Ok((on, off))
+}
+
+/// Program the lamp's own on/off clock (it then works with this computer switched off), and keep lampbus's idea of
+/// the lamp in step: the lamp reports nothing when its timer fires, so a shadow task applies the same change here.
+/// The timer is daily. Replaces any earlier timer for the same target.
+async fn set_timer(ctx: &Ctx, target: &Target, spec: &Value) -> Result<(), String> {
+    let (on, off) = parse_timer(spec)?;
+    let now = crate::schedule::local_clock()
+        .await
+        .ok_or("cannot read the local time")?;
+    let flags = on.map_or(0, |_| 16) + off.map_or(0, |_| 32) + now.weekday;
+    let (oh, om) = on.map_or((0, 0), |m| (m / 60, m % 60));
+    let (fh, fm) = off.map_or((0, 0), |m| (m / 60, m % 60));
+    let n = |v: u32| (v.to_string(), f64::from(v));
+    let args = [
+        ("flags", flags),
+        ("hour", now.hour),
+        ("minute", now.minute),
+        ("second", now.second),
+        ("on_week", if on.is_some() { 127 } else { 0 }),
+        ("on_hour", oh),
+        ("on_minute", om),
+        ("off_week", if off.is_some() { 127 } else { 0 }),
+        ("off_hour", fh),
+        ("off_minute", fm),
+    ]
+    .map(|(k, v)| (k.to_string(), n(v).1));
+    ctx.handle
+        .command(
+            target.clone(),
+            Command::Raw {
+                command: "timer".into(),
+                args: args.to_vec(),
+            },
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let key = match target {
+        Target::All => "*".to_string(),
+        Target::Named(n) => n.clone(),
+    };
+    let mut tasks = Vec::new();
+    for (minute, change) in [
+        (on, serde_json::json!({"color": "white", "brightness": 100})),
+        (off, serde_json::json!({"power": false})),
+    ] {
+        let Some(minute) = minute else { continue };
+        let (ctx, mut change) = (ctx.clone(), change);
+        if let (Target::Named(n), Some(o)) = (target, change.as_object_mut()) {
+            o.insert("device".into(), serde_json::json!(n));
+        }
+        tasks.push(tokio::spawn(async move {
+            let entry = [crate::schedule::Entry {
+                name: "lamp timer".into(),
+                minute,
+                days: (1..=7).collect(),
+                control: Value::Null,
+            }];
+            loop {
+                let Some(now) = crate::schedule::local_clock().await else {
+                    tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+                    continue;
+                };
+                let wait = crate::schedule::seconds_until_next(&entry, now).unwrap_or(3600);
+                tokio::time::sleep(std::time::Duration::from_secs(u64::from(wait) + 1)).await;
+                let _ = apply(&ctx, &change).await;
+            }
+        }));
+    }
+    if let Ok(mut all) = ctx.timers.0.lock() {
+        for old in all.insert(key, tasks).unwrap_or_default() {
+            old.abort();
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -198,6 +317,27 @@ mod tests {
         assert!(matches!(c.as_slice(), [Command::Hs { sat, .. }] if (*sat - 100.0).abs() < 1e-9));
         let (_, c) = commands(&lib(), &json!({"power": "toggle"})).unwrap();
         assert!(matches!(c.as_slice(), [Command::Power(None)]));
+    }
+
+    #[test]
+    fn timers_parse_and_a_timer_alone_is_valid() {
+        assert_eq!(parse_timer(&json!("clear")), Ok((None, None)));
+        assert_eq!(
+            parse_timer(&json!({"on": "07:00", "off": "23:30"})),
+            Ok((Some(420), Some(1410)))
+        );
+        assert_eq!(parse_timer(&json!({"off": "00:05"})), Ok((None, Some(5))));
+        for bad in [
+            json!({}),
+            json!("later"),
+            json!({"on": 7}),
+            json!({"on": "25:00"}),
+            json!({"at": "07:00"}),
+        ] {
+            assert!(parse_timer(&bad).is_err(), "{bad}");
+        }
+        let (_, cmds) = commands(&lib(), &json!({"timer": "clear"})).unwrap();
+        assert!(cmds.is_empty(), "handled by control, not by commands");
     }
 
     #[test]

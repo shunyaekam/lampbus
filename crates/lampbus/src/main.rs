@@ -43,6 +43,7 @@ fn direct(settings: &Settings) -> Result<(Ctx, Vec<lampbus_defs::Definition>), S
         handle,
         library: Library::new(settings.library_dir.clone()),
         auto_discover: settings.core.auto_adopt,
+        timers: Default::default(),
     };
     Ok((ctx, defs))
 }
