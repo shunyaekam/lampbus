@@ -48,6 +48,11 @@ Short, dated, with the reason. A decision can be reversed; write a new entry ins
   running `lampbus serve` through the control language, so it adds no semantics (D15). It uses rs-matter's test
   vendor identity (setup code 3497-011-2332), so Apple Home warns that it is uncertified. Commands are ignored until
   the Matter stack has finished replaying its stored defaults, which would otherwise switch the lamp on every restart.
+- **D19. Vendor a dependency when we need a change and upstream is not the place for it.** `vendor/astro-dnssd` is a
+  copy of an MIT/Apache crate with one documented change (a 10 s poll instead of 100 ms), recorded in its `PATCH.md`,
+  excluded from the workspace and wired in with `[patch.crates-io]`. Remove it if upstream adopts a wake-on-shutdown design.
+- **D20. Dependencies are audited in CI.** `cargo deny check` enforces permissive licences, no known vulnerabilities, only
+  crates.io plus the one pinned rs-matter commit, and flags unmaintained crates. An acknowledged advisory needs a reason in `deny.toml`.
 
 ## Open
 

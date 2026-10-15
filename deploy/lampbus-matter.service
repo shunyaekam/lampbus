@@ -1,0 +1,19 @@
+# systemd user unit: the Matter adapter (Apple Home, Google Home, Alexa, Home Assistant).
+# Installed by `deploy/install.sh --matter`; it needs the lampbus service running.
+[Unit]
+Description=lampbus Matter adapter
+After=lampbus.service network-online.target
+Wants=lampbus.service network-online.target
+
+[Service]
+ExecStart=%h/.local/bin/lampbus-matter
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.config/lampbus
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

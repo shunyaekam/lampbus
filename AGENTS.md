@@ -51,6 +51,7 @@ cargo clippy --workspace --all-targets -- -D warnings      # denies unwrap/expec
 cargo test --workspace                                      # 84 tests as of 2026-10-14
 cargo run -q -p lampbus-oracles -- --check                  # committed vectors match the oracles
 cargo build -p lampbus --no-default-features                # optional adapters stay optional
+cargo deny check                                            # licences, advisories, sources
 cd fuzz && cargo +nightly fuzz run core_sequences -- -max_total_time=60   # after touching the core
 ```
 Linux needs `libdbus-1-dev` and `pkg-config`. CI runs all of this on Linux and macOS. If you fix a bug in the core, add a
@@ -95,6 +96,9 @@ Measured (macOS, 2026-10-14): one-shot command 0.65-0.8 s from cold; daemon 12 M
 | `crates/` | `lampbus` (binary), `-core`, `-render`, `-defs`, `-shell` |
 | `definitions/` | lamp definitions + conformance vectors |
 | `library/` | starter animations and presets |
+| `apps/` | `lampbus-matter`, `lampbus-screen`, `lampbus-music` |
+| `deploy/`, `docs/INSTALL.md` | services and the step-by-step install guide (written for agents too) |
+| `vendor/` | vendored third-party crates with documented patches (`vendor/*/PATCH.md`) |
 | `tools/oracles` | independent vector generators |
 | `spec/` | the three open formats (definitions, animations, control language) |
 | `docs/` | PRINCIPLES (derivations), SCORECARD (measured targets), DECISIONS (dated, with reasons), research |

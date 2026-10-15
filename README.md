@@ -56,6 +56,8 @@ validated against hard limits and never execute code.
 - **Open formats:** [definitions](spec/definition-format.md), [animations](spec/animation-format.md),
   [the control language](spec/control-language.md).
 
+**Installing on an always-on machine** (also written for AI agents): [docs/INSTALL.md](docs/INSTALL.md).
+
 **Contributors and agents:** start with [AGENTS.md](AGENTS.md), then [docs/PRINCIPLES.md](docs/PRINCIPLES.md) for why.
 
 Measured numbers against stated targets are in [docs/SCORECARD.md](docs/SCORECARD.md). Decisions and their reasons

@@ -42,6 +42,7 @@ use rs_matter::dm::clusters::app::color_control::{
 };
 use rs_matter::dm::clusters::app::level_control::{self, LevelControlHooks};
 use rs_matter::dm::clusters::app::on_off::{self, OnOffHooks};
+use rs_matter::dm::clusters::basic_info::BasicInfoConfig;
 use rs_matter::dm::clusters::decl::color_control as color_control_cluster;
 use rs_matter::dm::clusters::decl::level_control::{
     AttributeId, CommandId, OptionsBitmap, FULL_CLUSTER as LEVEL_CONTROL_FULL_CLUSTER,
@@ -77,11 +78,13 @@ const SCENES_CAPACITY: usize = 16;
 
 const HELP: &str = "lampbus-matter: expose lampbus lamps to Matter (Apple Home, Google Home, Alexa, Home Assistant)
 
-USAGE  lampbus-matter [--lampbus host:port] [--device ALIAS] [--store DIR]
+USAGE  lampbus-matter [--lampbus host:port] [--device ALIAS] [--store DIR] [--name NAME]
 
   --lampbus host:port   the running `lampbus serve` (default 127.0.0.1:8787)
   --device ALIAS        control only this lamp (default: all lamps)
   --store DIR           where pairings are kept (default ~/.config/lampbus/matter)
+  --name NAME           name shown when pairing (default Lamp); an existing pairing keeps its name,
+                        rename it in the Home app
 
 The API token is read from LAMPBUS_TOKEN or ~/.config/lampbus/token.
 Pair with the setup code printed at start: this is a test-vendor device, so Apple Home will warn that it is uncertified.";
@@ -96,12 +99,14 @@ fn main() -> Result<(), Error> {
         None,
         home().join(".config/lampbus/matter"),
     );
+    let mut name = "Lamp".to_string();
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match (a.as_str(), args.next()) {
             ("--lampbus", Some(v)) => addr = v,
             ("--device", Some(v)) => device = Some(v),
             ("--store", Some(v)) => store_dir = std::path::PathBuf::from(v),
+            ("--name", Some(v)) => name = v.chars().take(32).collect(),
             _ => {
                 println!("{HELP}");
                 std::process::exit(if a == "-h" || a == "--help" { 0 } else { 2 });
@@ -123,7 +128,15 @@ fn main() -> Result<(), Error> {
         env_logger::Env::default().filter_or(env_logger::DEFAULT_FILTER_ENV, "info"),
     );
 
-    let matter = Matter::new(&TEST_DEV_DET, TEST_DEV_COMM, &TEST_DEV_ATT, MATTER_PORT);
+    // the test identity, with our own names so the accessory is not called "MyTest"
+    let name: &'static str = Box::leak(name.into_boxed_str());
+    let details: &'static BasicInfoConfig<'static> = Box::leak(Box::new(BasicInfoConfig {
+        vendor_name: "lampbus",
+        product_name: "lampbus lamp",
+        device_name: name,
+        ..TEST_DEV_DET
+    }));
+    let matter = Matter::new(details, TEST_DEV_COMM, &TEST_DEV_ATT, MATTER_PORT);
 
     // Persistence
     let store = rs_matter::persist::DirKvBlobStore::new(store_dir);
