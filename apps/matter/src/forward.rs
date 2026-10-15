@@ -190,6 +190,9 @@ pub fn lamp_on(body: &str, device: Option<&str>) -> Option<bool> {
         if device.is_some_and(|d| l.get("alias").and_then(Value::as_str) != Some(d)) {
             continue;
         }
+        if l.get("known").and_then(Value::as_bool) != Some(true) {
+            continue; // a restarted daemon has not been told what the lamp is doing
+        }
         any = Some(any.unwrap_or(false) || l.get("on").and_then(Value::as_bool)?);
     }
     any
@@ -279,7 +282,7 @@ mod tests {
 
     #[test]
     fn lamp_power_is_read_from_the_state_body() {
-        let s = r#"{"lamps":[{"alias":"a","on":false},{"alias":"b","on":true}],"scanning":false}"#;
+        let s = r#"{"lamps":[{"alias":"a","on":false,"known":true},{"alias":"b","on":true,"known":true},{"alias":"c","on":true}],"scanning":false}"#;
         assert_eq!(lamp_on(s, None), Some(true));
         assert_eq!(lamp_on(s, Some("a")), Some(false));
         assert_eq!(lamp_on(s, Some("zzz")), None);

@@ -1798,6 +1798,7 @@ dependencies = [
 name = "lampbus-shell"
 version = "0.0.1"
 dependencies = [
+ "aes",
  "btleplug",
  "futures",
  "lampbus-core",

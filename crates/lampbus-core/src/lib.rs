@@ -304,6 +304,9 @@ pub struct LampState {
     pub link: &'static str,
     /// Whether commands can be written right now.
     pub connected: bool,
+    /// Whether a command has been given since start. Before that, `on`, `rgb` and `brightness` are defaults, not
+    /// what the lamp is doing: after a restart nobody knows.
+    pub known: bool,
     /// Powered on.
     pub on: bool,
     /// Static colour.
@@ -762,6 +765,7 @@ impl Core {
                     definition: l.def.id.clone(),
                     link,
                     connected: l.link == Link::Ready,
+                    known: l.touched,
                     on: l.look.on,
                     rgb: l.look.rgb,
                     brightness: l.look.brightness.round() as u8,
