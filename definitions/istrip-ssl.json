@@ -70,7 +70,7 @@
   "wire": [ { "op": "aes-128-ecb", "key": "34522a5b7a6e492c08090a9d8d2a23f8" } ],
   "sources": [
     "decoded from the vendor Android app v1.4.3 and verified on an SSL-E089ED lamp",
-    "commands group, rhythm, timer and line_order are decoded from the app (BleProtocol, BleDataAgreement) but not yet verified on hardware; the colour type byte (1 white, 2 colour temperature in the app) showed no visible effect on an SSL-E089ED in two tests (2026-10-15, one confounded), so it is probably for RGBW strips",
+    "the timer command (off at a clock time, all weekdays = 127, flags = 32 + today's weekday) was verified on an SSL-E089ED on 2026-10-15: the lamp switched itself off with nothing else sent; commands group, rhythm and line_order are decoded from the app (BleProtocol, BleDataAgreement) but not yet verified on hardware; the colour type byte (1 white, 2 colour temperature in the app) showed no visible effect on an SSL-E089ED in two tests (2026-10-15, one confounded), so it is probably for RGBW strips",
     "https://github.com/vakintosh/istrip_plus_HA (docs/ble-protocol.md)",
     "https://github.com/gsp8181/ha-istrip-lamp-esphome (ISTRIP_PROTOCOL.md)"
   ]
