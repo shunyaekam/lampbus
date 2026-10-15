@@ -333,6 +333,25 @@ fn istrip_colour_is_one_frame_with_inline_brightness() {
 }
 
 #[test]
+fn white_balance_scales_each_channel_before_the_frame_is_built() {
+    let mut s = Sim::with(Config {
+        devices: vec![dev("lamp", "SSL-E089ED", "S1")],
+        white_balance: [0.5, 1.0, 0.25],
+        ..Config::default()
+    });
+    s.all(color([255.0, 255.0, 255.0], None));
+    s.advance(1000);
+    assert_eq!(
+        s.writes("S1"),
+        vec![wire(
+            ISTRIP,
+            "color",
+            &[("r", 128.0), ("g", 255.0), ("b", 64.0)]
+        )]
+    );
+}
+
+#[test]
 fn triones_scales_the_colour_because_it_has_no_brightness_control() {
     let mut s = Sim::new(vec![dev("tri", "Triones:1234", "T1")]);
     s.all(color([200.0, 100.0, 50.0], Some(50.0)));

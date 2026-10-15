@@ -21,6 +21,7 @@ struct File {
     auto_adopt: Option<bool>,
     idle_seconds: Option<f64>,
     color_gamma: Option<f64>,
+    white_balance: Option<[f64; 3]>,
     level_curve: Option<String>,
     dither: Option<bool>,
     definitions_dir: Option<String>,
@@ -105,6 +106,14 @@ pub fn load(path: Option<&Path>) -> Result<Settings, String> {
             return Err("color_gamma must be between 0.1 and 5".into());
         }
         core.color_gamma = g;
+    }
+    if let Some(w) = file.white_balance {
+        if w.iter().any(|g| !(0.0..=1.0).contains(g)) {
+            return Err(
+                "white_balance must be three gains between 0 and 1, e.g. [0.85, 1, 0.75]".into(),
+            );
+        }
+        core.white_balance = w;
     }
     core.level_curve = match file.level_curve.as_deref() {
         None | Some("linear") => LevelCurve::Linear,

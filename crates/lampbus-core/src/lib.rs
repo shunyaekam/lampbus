@@ -75,6 +75,9 @@ pub struct Config {
     pub scan_timeout_ms: Ms,
     /// Colour response curve exponent (1.0 = none).
     pub color_gamma: f64,
+    /// Per-channel gain `0..=1` applied before the curve, to cancel a lamp's tint (a coated or diffused lamp makes
+    /// full white look purple). `[1, 1, 1]` = none.
+    pub white_balance: [f64; 3],
     /// Brightness curve.
     pub level_curve: LevelCurve,
     /// Temporal dithering for animations and streams. Off by default: alternating adjacent levels flickers visibly
@@ -97,6 +100,7 @@ impl Default for Config {
             connect_timeout_ms: 30_000,
             scan_timeout_ms: 15_000,
             color_gamma: 1.0,
+            white_balance: [1.0; 3],
             level_curve: LevelCurve::Linear,
             dither: false, // off by default: at the dim end it flickers visibly at 20 updates/s (owner's lamp, 2026-10-15)
             stream_attack_ms: 30.0,

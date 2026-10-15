@@ -73,8 +73,13 @@ Optional: `~/.config/lampbus/config.json`.
  "bind": "127.0.0.1:8787",
  "definitions_dir": "~/.config/lampbus/definitions",
  "library_dir": "~/.config/lampbus/library",
- "color_gamma": 1.0, "level_curve": "linear", "dither": false}
+ "color_gamma": 1.0, "level_curve": "linear", "dither": false,
+ "white_balance": [1, 1, 1]}
 ```
+
+`white_balance` is three gains (0 to 1) for red, green and blue, applied to every colour before the lamp sees it: a lamp
+with a coating or a diffuser can make full white look tinted, and cutting the strong channels cancels that
+(`[0.85, 1, 0.75]` for the author's coated rainbow lamp, which made full white look purple).
 
 The API token is created on first use in `~/.config/lampbus/token` (mode 0600). Bind to a Tailscale address to reach
 the daemon from your other devices; the API is plain HTTP and relies on that network for encryption.

@@ -226,10 +226,11 @@ impl Lamp {
         let cal = Calibration {
             gamma: cfg.color_gamma,
         };
+        let g = cfg.white_balance;
         [
-            cal.apply(rgb[0] / 255.0) * 255.0,
-            cal.apply(rgb[1] / 255.0) * 255.0,
-            cal.apply(rgb[2] / 255.0) * 255.0,
+            cal.apply(rgb[0] / 255.0 * g[0]) * 255.0,
+            cal.apply(rgb[1] / 255.0 * g[1]) * 255.0,
+            cal.apply(rgb[2] / 255.0 * g[2]) * 255.0,
         ]
     }
 
