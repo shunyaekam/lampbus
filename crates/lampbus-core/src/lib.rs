@@ -173,6 +173,8 @@ pub enum Command {
     },
     /// Stop any animation and keep exactly what it is showing right now.
     StopAnimation,
+    /// End the pause on live streams that a person's command started (the lamp is handed back to whatever streams).
+    ResumeStreams,
     /// One frame of a live source (screen, music). Overrides everything until it stops arriving.
     Stream {
         /// Red, green, blue.
@@ -495,7 +497,10 @@ impl Core {
         let Some(lamp) = self.lamps.get_mut(i) else {
             return Ok(());
         };
-        if !matches!(cmd, Command::Raw { .. } | Command::Label(_)) {
+        if !matches!(
+            cmd,
+            Command::Raw { .. } | Command::Label(_) | Command::ResumeStreams
+        ) {
             lamp.touched = true;
             lamp.forget_for(cmd);
             match cmd {
@@ -616,6 +621,7 @@ impl Core {
                     lamp.look.brightness = pct(*b);
                 }
             }
+            Command::ResumeStreams => lamp.yield_until = 0,
             Command::StopAnimation => {
                 lamp.freeze_animation(now);
                 lamp.look.active = None;

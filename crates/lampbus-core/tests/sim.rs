@@ -1542,3 +1542,37 @@ fn a_stream_publishes_the_snapshot_about_once_a_second_and_at_once_for_a_big_cha
     );
     assert_eq!(s.core.snapshot(s.now).lamps[0].rgb, [0, 200, 255]);
 }
+
+#[test]
+fn resume_streams_ends_the_pause_a_persons_command_started() {
+    let mut s = Sim::with(Config {
+        devices: vec![dev("lamp", "SSL-E089ED", "S1")],
+        stream_yield_ms: 3_600_000,
+        ..Config::default()
+    });
+    s.all(color([0.0, 255.0, 0.0], Some(20.0)));
+    s.advance(1_000);
+    let stream = |s: &mut Sim| {
+        for _ in 0..20 {
+            s.all(Command::Stream {
+                rgb: [255.0, 0.0, 0.0],
+                brightness: 50.0,
+            });
+            s.advance(50);
+        }
+    };
+    stream(&mut s);
+    assert_eq!(
+        s.core.snapshot(s.now).lamps[0].source,
+        "color",
+        "the person's colour holds against the stream"
+    );
+    s.all(Command::ResumeStreams);
+    stream(&mut s);
+    let l = s.core.snapshot(s.now).lamps[0].clone();
+    assert_eq!(
+        (l.source, l.rgb),
+        ("stream", [255, 0, 0]),
+        "handed back: the stream is shown again"
+    );
+}

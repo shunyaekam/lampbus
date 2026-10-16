@@ -104,6 +104,10 @@ async fn route(app: Arc<App>, req: Request) -> Reply {
             Ok(v) => match v.get("on").and_then(Value::as_bool) {
                 Some(on) => {
                     app.ctx.forward.set_direct(on);
+                    if !on {
+                        // handing the lamp back: a person's earlier command no longer pauses what the controller streams
+                        let _ = app.ctx.handle.command(Target::All, Command::ResumeStreams).await;
+                    }
                     json_reply(200, &app.ctx.forward.status())
                 }
                 None => bad("give {\"on\": true} to control the lamp directly, or {\"on\": false} to hand it to the controller"),
