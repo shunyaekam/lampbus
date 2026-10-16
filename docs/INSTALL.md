@@ -138,15 +138,12 @@ control works; every deviation from this guide and every error message verbatim.
 | Where | Permission | Why | How to grant |
 |---|---|---|---|
 | macOS | **Bluetooth** for the terminal, or the service binary | talking to the lamp | System Settings > Privacy & Security > Bluetooth |
-| macOS | **Screen & System Audio Recording** for the app that launches `lampbus-screen` (Terminal, iTerm, VS Code) | screen ambient light; without it only the wallpaper is visible | System Settings > Privacy & Security; quit and reopen the app after enabling |
-| macOS | **Microphone** for the app that launches `lampbus-music` | music-reactive light | System Settings > Privacy & Security > Microphone |
 | macOS | **Incoming connections** for `lampbus-matter` | Matter pairing and control | allow when the firewall asks, or System Settings > Network > Firewall |
 | macOS | **Local Network** (macOS 15+) | Matter and the web UI on your LAN | allow when prompted |
 | iPhone | **Local Network** for the Home app | finding the accessory | Settings > Privacy & Security > Local Network > Home |
 | Linux | membership of the `bluetooth` group; `loginctl enable-linger`; UDP 5540 and 5353 open | headless service, Matter | steps 2 and 6 |
 
-Only the machine that runs `lampbus-screen` or `lampbus-music` needs the screen or microphone permission; the always-on
-machine does not (it normally runs only `lampbus` and `lampbus-matter`).
+Apps that read your screen or microphone (see [living-lamp](https://github.com/shunyaekam/living-lamp)) need their own permission on the machine that runs them; the always-on machine normally runs only `lampbus` and `lampbus-matter`.
 
 ## Updating and rolling back
 

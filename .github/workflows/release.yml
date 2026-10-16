@@ -18,13 +18,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev libasound2-dev pkg-config
+        run: sudo apt-get update && sudo apt-get install -y libdbus-1-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo build --release -p lampbus -p lampbus-screen -p lampbus-music
+      - run: cargo build --release -p lampbus
       - name: Package
         run: |
-          mkdir dist && cp target/release/lampbus target/release/lampbus-music dist/
-          [ -f target/release/lampbus-screen ] && cp target/release/lampbus-screen dist/ || true
+          mkdir dist && cp target/release/lampbus dist/
           cp -r deploy dist/deploy && tar -C dist -czf lampbus-${{ matrix.name }}.tar.gz .
       - uses: actions/upload-artifact@v4
         with: { name: "lampbus-${{ matrix.name }}", path: "lampbus-${{ matrix.name }}.tar.gz" }

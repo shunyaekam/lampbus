@@ -70,7 +70,7 @@ pub struct Config {
     /// A live stream is considered over this long after its last frame.
     pub stream_timeout_ms: Ms,
     /// After a person sends a colour, effect or animation, ignore live streams for this long (0 = never). Turning the
-    /// lamp on ends the pause. Lets an ambient program such as `lampbus-life` coexist with human control.
+    /// lamp on ends the pause. Lets an ambient program such as the living lamp coexist with human control.
     pub stream_yield_ms: Ms,
     /// Fade between colours and brightness levels over this long (0 = change instantly). Eased in and out and mixed in
     /// linear light, so every change, from any door, looks analog rather than stepped.

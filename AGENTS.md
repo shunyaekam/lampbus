@@ -11,7 +11,7 @@ CLI, an HTTP API, or an agent over MCP. Lamps are data (JSON definitions + test 
 are thin. Goal: the cleanest, smallest, cheapest-to-run code that does the job, measured, not claimed.
 
 **Status (2026-10-14): pre-alpha.** Works on the owner's iStrip lamp. Only that definition is hardware-verified; ELK-BLEDOM,
-Triones and Govee are source-verified. The Matter adapter (`apps/matter`) advertises and starts but is not yet confirmed to pair with Apple Home. Apps (`apps/screen`, `apps/music`), the web UI, UDP/DDP input and schedules exist but are only unit-tested and smoke-tested, not used in anger.
+Triones and Govee are source-verified. The Matter adapter (`apps/matter`) advertises and starts but is not yet confirmed to pair with Apple Home. The web UI, UDP/DDP input and schedules exist but are only unit-tested and smoke-tested, not used in anger.
 
 ## Rules (each derived in PRINCIPLES.md)
 
@@ -96,7 +96,7 @@ Measured (macOS, 2026-10-14): one-shot command 0.65-0.8 s from cold; daemon 12 M
 | `crates/` | `lampbus` (binary), `-core`, `-render`, `-defs`, `-shell` |
 | `definitions/` | lamp definitions + conformance vectors |
 | `library/` | starter animations and presets |
-| `apps/` | `lampbus-matter`, `lampbus-screen`, `lampbus-music` |
+| `apps/` | `lampbus-matter`. The creature, screen and music apps are in [living-lamp](https://github.com/shunyaekam/living-lamp) |
 | `deploy/`, `docs/INSTALL.md` | services and the step-by-step install guide (written for agents too) |
 | `vendor/` | vendored third-party crates with documented patches (`vendor/*/PATCH.md`) |
 | `tools/oracles` | independent vector generators |

@@ -39,7 +39,7 @@ Bind to your Tailscale address instead of localhost, for example `"bind": "100.x
 home screen. The API is plain HTTP with a bearer token and relies on the private network for encryption: **do not bind it
 to a public address.** The UDP inputs are unauthenticated; keep them on localhost or the tailnet.
 
-Point screen and music apps at the same machine: `lampbus-screen --to 100.x.y.z:8789`.
+Point apps such as [living-lamp](https://github.com/shunyaekam/living-lamp) at the same machine: `lampbus-screen --to 100.x.y.z:8789`.
 
 ## 5. Apple Home, Google Home, Alexa, Home Assistant (Matter)
 
