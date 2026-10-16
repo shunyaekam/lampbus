@@ -15,19 +15,26 @@ use std::f64::consts::TAU;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Frame {
     pub rgb: [u8; 3],
-    /// Percent, 0 to 100.
-    pub level: u8,
+    /// Percent, 0 to 100, not rounded: a slow fade must not step in whole percents.
+    pub level: f64,
 }
 
 impl Frame {
     /// The same light with the level moved into the colour channels (level 100): 255 steps instead of 100 at the dim
     /// end, so slow changes look smoother. The hue shifts slightly where a channel is small.
     pub fn fine(self) -> Frame {
-        let k = f64::from(self.level) / 100.0;
+        let k = self.level / 100.0;
         Frame {
             rgb: self.rgb.map(|c| (f64::from(c) * k).round() as u8),
-            level: 100,
+            level: 100.0,
         }
+    }
+
+    /// The five-byte datagram for lampbus's UDP input: colour, then the level as a 16-bit number in hundredths of a
+    /// percent, so a slow fade has up to 10,000 steps instead of 100.
+    pub fn wire(self) -> [u8; 5] {
+        let [hi, lo] = ((self.level * 100.0).round().clamp(0.0, 10_000.0) as u16).to_be_bytes();
+        [self.rgb[0], self.rgb[1], self.rgb[2], hi, lo]
     }
 }
 
@@ -585,7 +592,7 @@ impl Life {
         let ceiling = (max_level.clamp(0.0, 100.0) + EVENT_HEADROOM * peak).min(100.0);
         Frame {
             rgb: rgb.map(|c| c.round().clamp(0.0, 255.0) as u8),
-            level: level.clamp(0.0, ceiling).round() as u8,
+            level: level.clamp(0.0, ceiling),
         }
     }
 }
@@ -626,7 +633,7 @@ mod tests {
 
     fn reversals_per_second(l: &mut Life, hour: f64, secs: usize) -> f64 {
         let frames: Vec<f64> = (0..secs * 20)
-            .map(|i| f64::from(l.step(i as f64 / 20.0, hour, 100.0).level))
+            .map(|i| l.step(i as f64 / 20.0, hour, 100.0).level)
             .collect();
         let n = frames
             .windows(3)
@@ -672,7 +679,7 @@ mod tests {
                 }
                 let f = l.step(t, 14.0, 40.0);
                 assert!(
-                    f.level <= 65,
+                    f.level <= 65.0,
                     "{mood}: even an event stays under the headroom: {} at {t}",
                     f.level
                 );
@@ -704,16 +711,16 @@ mod tests {
         }
         *l.target_mut() = Params::mood("campfire").unwrap();
         let mut prev = l.step(20.0, 13.0, 100.0);
-        let mut worst = 0i32;
+        let mut worst: f64 = 0.0;
         for i in 1..600 {
             let f = l.step(20.0 + f64::from(i) / 20.0, 13.0, 100.0);
-            worst = worst.max((i32::from(f.level) - i32::from(prev.level)).abs());
+            worst = worst.max((f.level - prev.level).abs());
             prev = f;
         }
-        assert!(worst <= 6, "largest single-frame step {worst} percent");
+        assert!(worst <= 6.0, "largest single-frame step {worst} percent");
         // and it arrives: the campfire is redder and brighter than the afternoon
         assert!(
-            prev.rgb[1] < 120 && prev.level >= 35,
+            prev.rgb[1] < 120 && prev.level >= 35.0,
             "settled on campfire: {prev:?}"
         );
     }
@@ -802,7 +809,7 @@ mod tests {
             for i in 0..4000 {
                 let f = l.step(f64::from(i) / 20.0, 14.0, 40.0);
                 assert!(
-                    f.level <= 40,
+                    f.level <= 40.0,
                     "{mood}: ambient level {} at step {i}",
                     f.level
                 );
@@ -847,12 +854,91 @@ mod tests {
         );
         let peak = (0..60)
             .map(|i| l.step(20.0 + f64::from(i) / 20.0, 14.0, 40.0).level)
-            .max()
-            .unwrap();
+            .fold(0.0, f64::max);
         assert!(
-            i32::from(peak) - i32::from(before.level) >= 12,
+            peak - before.level >= 12.0,
             "the swell is at least 12 percent brighter: {} -> {peak}",
             before.level
+        );
+    }
+
+    #[test]
+    fn a_slow_dim_has_no_plateaus_where_whole_percents_would() {
+        // found live: sending the level as whole percents made a 12 s dim from 40% to 20% step once every 0.6 s
+        let mut l = Life::new(3);
+        *l.target_mut() = Params::mood("focus").unwrap();
+        l.target_mut().set("breath_depth", 0.0);
+        l.target_mut().set("drift", 0.0);
+        l.target_mut().set("stir_every", 3600.0);
+        for i in 0..1200 {
+            l.step(f64::from(i) / 20.0, 14.0, 100.0);
+        }
+        l.target_mut().set("level", 20.0);
+        let frames: Vec<Frame> = (0..240)
+            .map(|i| l.step(60.0 + f64::from(i) / 20.0, 14.0, 100.0))
+            .collect();
+        let longest = |keys: Vec<[u8; 5]>| {
+            let (mut best, mut run) = (1, 1);
+            for w in keys.windows(2) {
+                run = if w[0] == w[1] { run + 1 } else { 1 };
+                best = best.max(run);
+            }
+            best
+        };
+        let fine = longest(frames.iter().map(|f| f.wire()).collect());
+        let whole = longest(
+            frames
+                .iter()
+                .map(|f| {
+                    Frame {
+                        level: f.level.round(),
+                        ..*f
+                    }
+                    .wire()
+                })
+                .collect(),
+        );
+        assert!(
+            fine <= 2,
+            "at hundredths of a percent the longest run of identical frames is {fine}"
+        );
+        assert!(
+            whole >= 8,
+            "whole percents would sit still for {whole} frames (0.4 s): that was the stepping"
+        );
+    }
+
+    #[test]
+    fn the_wire_form_round_trips_the_level() {
+        let f = Frame {
+            rgb: [1, 2, 3],
+            level: 12.34,
+        };
+        assert_eq!(f.wire(), [1, 2, 3, 0x04, 0xd2]);
+        assert_eq!(
+            Frame {
+                rgb: [0; 3],
+                level: 100.0
+            }
+            .wire()[3..],
+            [0x27, 0x10]
+        );
+        assert_eq!(
+            Frame {
+                rgb: [0; 3],
+                level: 250.0
+            }
+            .wire()[3..],
+            [0x27, 0x10],
+            "capped at 100%"
+        );
+        assert_eq!(
+            Frame {
+                rgb: [0; 3],
+                level: -3.0
+            }
+            .wire()[3..],
+            [0, 0]
         );
     }
 
@@ -890,13 +976,13 @@ mod tests {
     fn the_fine_form_is_the_same_light_with_finer_steps() {
         let f = Frame {
             rgb: [255, 100, 10],
-            level: 20,
+            level: 20.0,
         }
         .fine();
-        assert_eq!((f.rgb, f.level), ([51, 20, 2], 100));
+        assert_eq!((f.rgb, f.level), ([51, 20, 2], 100.0));
         let full = Frame {
             rgb: [1, 2, 3],
-            level: 100,
+            level: 100.0,
         };
         assert_eq!(full.fine(), full);
     }

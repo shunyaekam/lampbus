@@ -1,6 +1,7 @@
 //! Live colour input over UDP, so other programs can drive a lamp without speaking HTTP or holding a socket open.
 //!
-//! - **simple**: a datagram of 3 or 4 bytes, `r g b [brightness 0-100]`. Trivial to send from any language.
+//! - **simple**: a datagram of 3, 4 or 5 bytes: `r g b`, `r g b brightness` (whole percent), or `r g b hi lo` (brightness as
+//!   a 16-bit number in hundredths of a percent, for smooth slow fades). Trivial to send from any language.
 //! - **DDP** (Distributed Display Protocol, used by WLED, HyperHDR, LedFx and xLights): the first pixel of the data at
 //!   offset 0 becomes the lamp colour, so tools built for LED strips drive a Bluetooth lamp unchanged.
 //!
@@ -10,13 +11,18 @@ use lampbus_core::Target;
 use lampbus_shell::Handle;
 use tokio::net::UdpSocket;
 
-/// `r g b` or `r g b brightness`.
+/// `r g b`, `r g b brightness` (whole percent), or `r g b hi lo`: brightness as a big-endian 16-bit number in hundredths
+/// of a percent (0 to 10000). The last form is for slow fades: whole percents step visibly at 20 updates a second.
 pub fn parse_simple(d: &[u8]) -> Option<([f64; 3], f64)> {
     match d {
         [r, g, b] => Some(([f64::from(*r), f64::from(*g), f64::from(*b)], 100.0)),
         [r, g, b, v] => Some((
             [f64::from(*r), f64::from(*g), f64::from(*b)],
             f64::from((*v).min(100)),
+        )),
+        [r, g, b, hi, lo] => Some((
+            [f64::from(*r), f64::from(*g), f64::from(*b)],
+            f64::from(u16::from_be_bytes([*hi, *lo]).min(10_000)) / 100.0,
         )),
         _ => None,
     }
@@ -79,7 +85,21 @@ mod tests {
             Some(100.0),
             "brightness is capped"
         );
-        for bad in [&[][..], &[1][..], &[1, 2][..], &[1, 2, 3, 4, 5][..]] {
+        // five bytes: brightness in hundredths of a percent, big-endian
+        assert_eq!(
+            parse_simple(&[1, 2, 3, 0x0f, 0xa0]).map(|x| x.1),
+            Some(40.0)
+        );
+        assert_eq!(
+            parse_simple(&[1, 2, 3, 0x00, 0x01]).map(|x| x.1),
+            Some(0.01)
+        );
+        assert_eq!(
+            parse_simple(&[1, 2, 3, 0xff, 0xff]).map(|x| x.1),
+            Some(100.0),
+            "capped"
+        );
+        for bad in [&[][..], &[1][..], &[1, 2][..], &[1, 2, 3, 4, 5, 6][..]] {
             assert!(parse_simple(bad).is_none());
         }
     }

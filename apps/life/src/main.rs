@@ -276,7 +276,7 @@ fn main() {
             f = f.fine();
         }
         if !state.asleep {
-            let _ = out.send_to(&[f.rgb[0], f.rgb[1], f.rgb[2], f.level], &o.to);
+            let _ = out.send_to(&f.wire(), &o.to);
         }
         std::thread::sleep(frame_time);
     }
