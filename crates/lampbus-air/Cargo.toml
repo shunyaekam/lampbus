@@ -1,0 +1,14 @@
+[package]
+name = "lampbus-air"
+version = "0.0.1"
+description = "The over-the-air (advertising) side of iStrip lamps: frame cipher, on-air framing and status decoding. No dependencies, no_std."
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true

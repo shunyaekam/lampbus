@@ -29,10 +29,14 @@ The twelve effects: Fade7, Fade3, Breath R, Strobe R, Breath7, Breath3, Breath B
 
 ## What is not here
 
-- **Advertising broadcast.** The app can also steer lamps without connecting, by advertising a 16-byte payload
-  (`[random, product0..2, 0xC3, frame, mode, r|light, g|speed, b, group, fftStatus, light|sensitivity, random×3]`;
-  `0xC5` is the timer, another code the line order), encoded by a native library. Groups matter there. Not reproduced:
-  macOS cannot advertise arbitrary data, so it needs Linux/BlueZ or a phone.
+- **Advertising broadcast: the frame layer is reproduced, the radio side is not yet tested.** The app steers lamps
+  without connecting by advertising a 16-byte frame as manufacturer data (company id `0xFFF0`, non-connectable).
+  [`crates/lampbus-air`](../../crates/lampbus-air) implements the vendor's native encoder (`libWirelessEncoder.so`:
+  a keyed byte-chained cipher, then CRC-16, a BLE-style whitening layer and bit reversal that make the bits on the
+  air a 2.4 GHz remote packet) and is checked byte for byte against the real library run under CPU emulation. The
+  command frame is `[rand, 54 00 1d, c3, counter, mode, r|light, g|speed, b, group, 0, brightness, 3-byte code]`
+  (`c4` sets the line order). What is not proven: that a lamp acts on frames we advertise (needs a radio that can
+  advertise arbitrary data: a phone, an ESP32 or Linux; macOS cannot), and whether it requires a paired code.
 - **State read-back, connected: none.** Over the connection the lamp answers only command 1. After its own timer
   fires, or after the vendor app changes it, nothing tells us. lampbus therefore sends every explicit command in
   full (DECISIONS D22) and mirrors the timers it programmed itself (D23).
