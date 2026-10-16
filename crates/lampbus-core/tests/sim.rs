@@ -1576,3 +1576,21 @@ fn resume_streams_ends_the_pause_a_persons_command_started() {
         "handed back: the stream is shown again"
     );
 }
+
+#[test]
+fn streamed_frames_do_not_make_the_lamps_state_known() {
+    let mut s = Sim::new(vec![dev("lamp", "SSL-E089ED", "S1")]);
+    for _ in 0..10 {
+        s.all(Command::Stream {
+            rgb: [255.0, 100.0, 0.0],
+            brightness: 30.0,
+        });
+        s.advance(50);
+    }
+    assert!(
+        !s.core.snapshot(s.now).lamps[0].known,
+        "only a command makes the state known"
+    );
+    s.all(Command::Power(Some(true)));
+    assert!(s.core.snapshot(s.now).lamps[0].known);
+}

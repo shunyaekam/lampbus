@@ -497,9 +497,14 @@ impl Core {
         let Some(lamp) = self.lamps.get_mut(i) else {
             return Ok(());
         };
+        // a streamed frame does not make the lamp's state known: lampbus has been told nothing about the lamp until a person
+        // (or a controller's motor) gives a command
         if !matches!(
             cmd,
-            Command::Raw { .. } | Command::Label(_) | Command::ResumeStreams
+            Command::Raw { .. }
+                | Command::Label(_)
+                | Command::ResumeStreams
+                | Command::Stream { .. }
         ) {
             lamp.touched = true;
             lamp.forget_for(cmd);
