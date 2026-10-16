@@ -1,4 +1,4 @@
-//! `lampbus-screen`: ambient lighting from your screen. Captures the main display, reduces it to a colour and an
+//! `lampbus-screen`: ambient lighting from your screen. Captures a display (the main one by default), reduces it to a colour and an
 //! intensity (see `analyse.rs`), and sends 4 bytes over UDP to a running `lampbus serve` with `udp_stream` enabled.
 //!
 //! macOS only; needs Screen Recording permission for the terminal you run it from.
@@ -12,12 +12,13 @@ use std::time::{Duration, Instant};
 
 const HELP: &str = "lampbus-screen: ambient lighting from your screen (macOS)
 
-USAGE  lampbus-screen [--to host:port] [--fps N] [--mode mean|vivid] [--min-brightness N] [--once]
+USAGE  lampbus-screen [--to host:port] [--fps N] [--mode mean|vivid] [--display N] [--min-brightness N] [--once]
 
   --to host:port      where `lampbus serve` listens for UDP (default 127.0.0.1:8789;
                       enable it with \"udp_stream\": \"127.0.0.1:8789\" in the lampbus config)
   --fps N             frames per second, 1-30 (default 10)
   --mode mean|vivid   plain average, or favour colourful pixels (default vivid)
+  --display N         which screen: 1 is the main display, 2 the next, and so on (default 1)
   --min-brightness N  intensity of a black screen, 0-100 (default 8)
   --creature host:port  tell a running lampbus-life to hold off while this runs (default 127.0.0.1:8790; off disables)
   --once              print one analysis and exit (use this to check permissions)";
@@ -27,6 +28,7 @@ struct Opts {
     fps: f64,
     mode: Mode,
     min_level: u8,
+    display: usize,
     once: bool,
     creature: Option<String>,
 }
@@ -37,6 +39,7 @@ fn parse(args: Vec<String>) -> Result<Option<Opts>, String> {
         fps: 10.0,
         mode: Mode::Vivid,
         min_level: 8,
+        display: 1,
         once: false,
         creature: Some("127.0.0.1:8790".into()),
     };
@@ -64,6 +67,13 @@ fn parse(args: Vec<String>) -> Result<Option<Opts>, String> {
                     "vivid" => Mode::Vivid,
                     other => return Err(format!("unknown mode {other:?}")),
                 }
+            }
+            "--display" => {
+                o.display = value("--display")?
+                    .parse::<usize>()
+                    .ok()
+                    .filter(|n| *n >= 1)
+                    .ok_or("--display must be 1 or more")?;
             }
             "--once" => o.once = true,
             "--creature" => {
@@ -106,11 +116,24 @@ mod capture {
         ScreenCaptureAccess.request()
     }
 
+    /// Display `n` (1 is the main display, then the others in the order macOS lists them).
+    fn pick(n: usize) -> Option<CGDisplay> {
+        let main = CGDisplay::main();
+        let others = CGDisplay::active_displays()
+            .ok()?
+            .into_iter()
+            .filter(|id| *id != main.id);
+        std::iter::once(main.id)
+            .chain(others)
+            .nth(n - 1)
+            .map(CGDisplay::new)
+    }
+
     /// The main display as BGRA, drawn into an sRGB bitmap so macOS does the colour management. The raw capture is in the
     /// display's own space (Display P3 on most Macs), which read as sRGB washes every colour towards white: pure green
     /// arrives as (117, 251, 76).
-    pub fn grab() -> Option<Shot> {
-        let img = CGDisplay::main().image()?;
+    pub fn grab(display: usize) -> Option<Shot> {
+        let img = pick(display)?.image()?;
         let width = img.width().min(WIDTH);
         let height = (img.height() * width / img.width().max(1)).max(1);
         let name = CFString::new("kCGColorSpaceSRGB");
@@ -154,7 +177,7 @@ mod capture {
     pub fn request() -> bool {
         false
     }
-    pub fn grab() -> Option<Shot> {
+    pub fn grab(_display: usize) -> Option<Shot> {
         None
     }
 }
@@ -180,7 +203,8 @@ fn run(o: &Opts) -> Result<(), String> {
     let mut last_hold: Option<Instant> = None;
     loop {
         let started = Instant::now();
-        let shot = capture::grab().ok_or("could not capture the display")?;
+        let shot = capture::grab(o.display)
+            .ok_or_else(|| format!("could not capture display {}", o.display))?;
         // BGRA: the byte order macOS display captures use
         let img = Image {
             px: &shot.bytes,
