@@ -165,3 +165,23 @@ Rollback: `git checkout <previous commit>` and rebuild. Pairings and the token l
 | Home cannot find the accessory | firewall blocking UDP 5540/5353; phone on another network or guest Wi-Fi; Home app lacks Local Network permission on the phone |
 | `Address already in use` from the adapter | another adapter is still running (old machine) or an old process: `pkill lampbus-matter` |
 | API returns 401 | wrong or missing token; it is in `~/.config/lampbus/token` |
+
+## Broadcast control (optional, Linux, experimental)
+
+Besides connecting to a lamp, lampbus can steer it by **advertising**, with no connection (see
+[protocols/istrip.md](protocols/istrip.md)). The frame layer is verified against the vendor's own encoder; that a lamp
+acts on our advertisements has **not yet been confirmed on hardware**, so treat this as a test.
+
+Needs a Bluetooth adapter that can advertise (any recent USB one) and BlueZ's `btmgmt` (the `bluez` package). Run it as
+root, or give the tool the capability once: `sudo setcap cap_net_admin+ep "$(command -v btmgmt)"`.
+
+```sh
+lampbus air red 100 --print       # shows the advertisement as hex; nothing is sent
+sudo lampbus air red 100          # advertises it for 2 s; the lamp, in range, should turn red
+sudo lampbus air off
+sudo lampbus air effect 1 100 50  # built-in effect 1 at 100% brightness, speed 50
+sudo lampbus air line 0           # LED line order
+```
+`--secs N` changes how long it advertises and `--group N` the group (default 1). The advertisement carries no flags
+(`btmgmt add-adv` without `-c -g -l -m`): a Flags field would shift the frame by three bytes and the lamp would ignore it.
+If the lamp does nothing, report it with `lampbus gatt <name>` output and the `btmgmt` output.

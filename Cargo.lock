@@ -1717,6 +1717,7 @@ version = "0.0.1"
 dependencies = [
  "axum",
  "getrandom 0.4.3",
+ "lampbus-air",
  "lampbus-core",
  "lampbus-defs",
  "lampbus-render",

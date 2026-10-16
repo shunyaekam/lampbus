@@ -1,5 +1,6 @@
 //! `lampbus`: control Bluetooth lamps from the command line, an HTTP API, or an MCP server (for agents).
 
+mod air;
 mod assets;
 mod cli;
 mod config;
@@ -92,6 +93,16 @@ async fn run() -> Result<(), String> {
             definition,
             vectors,
         } => return check(&definition, vectors.as_deref()),
+        Cmd::Air { what } => {
+            let settings = config::load(g.config.as_deref())?;
+            return air::run(
+                &what,
+                g.group.unwrap_or(1),
+                g.secs.unwrap_or(2),
+                g.print,
+                &settings.config_dir,
+            );
+        }
         Cmd::Gatt { name, seconds } => {
             let report =
                 lampbus_shell::inspect::gatt(name.as_deref(), Duration::from_secs(seconds)).await?;
@@ -273,7 +284,8 @@ async fn client(g: &Global, settings: &Settings, cmd: Cmd) -> Result<(), String>
         | Cmd::Serve
         | Cmd::Mcp
         | Cmd::Check { .. }
-        | Cmd::Gatt { .. } => {}
+        | Cmd::Gatt { .. }
+        | Cmd::Air { .. } => {}
     }
     Ok(())
 }
@@ -385,7 +397,8 @@ async fn via_remote(g: &Global, r: &Remote, cmd: Cmd) -> Result<(), String> {
         | Cmd::Serve
         | Cmd::Mcp
         | Cmd::Check { .. }
-        | Cmd::Gatt { .. } => {}
+        | Cmd::Gatt { .. }
+        | Cmd::Air { .. } => {}
     }
     Ok(())
 }

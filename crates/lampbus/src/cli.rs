@@ -25,6 +25,7 @@ COMMANDS
   scan                           find lamps nearby
   gatt [name] [seconds]          read-only look at a Bluetooth device (services, readable values, announcements); no name lists devices
   check <definition.json> [vectors.json]   validate a lamp definition and its test vectors (no Bluetooth needed)
+  air <color [brightness]|off|effect <1-12>|line <0-5>>   steer lamps by broadcast, no connection (Linux + BlueZ); --print shows the hex
   calibrate <brightness|ramp|low>  guided checks to settle open questions about your lamp
   definitions                    lamp families this build understands
   serve                          run the HTTP API (keeps the Bluetooth link, runs animations)
@@ -48,6 +49,9 @@ pub struct Global {
     pub remote: Option<String>,
     pub json: bool,
     pub hold: bool,
+    pub print: bool,
+    pub secs: Option<u64>,
+    pub group: Option<u8>,
 }
 
 pub enum Cmd {
@@ -70,6 +74,9 @@ pub enum Cmd {
     Check {
         definition: PathBuf,
         vectors: Option<PathBuf>,
+    },
+    Air {
+        what: crate::air::What,
     },
     Calibrate(String),
     Definitions,
@@ -106,6 +113,21 @@ pub fn parse(argv: Vec<String>) -> Result<(Global, Cmd), String> {
             "--version" => return Ok((g, Cmd::Version)),
             "--json" => g.json = true,
             "--hold" => g.hold = true,
+            "--print" => g.print = true,
+            "--secs" => {
+                g.secs = Some(
+                    it.next()
+                        .and_then(|v| v.parse().ok())
+                        .ok_or("--secs needs a whole number")?,
+                )
+            }
+            "--group" => {
+                g.group = Some(
+                    it.next()
+                        .and_then(|v| v.parse().ok())
+                        .ok_or("--group needs a number 0 to 255")?,
+                )
+            }
             "-d" | "--device" => g.device = Some(it.next().ok_or("--device needs a name")?),
             "--config" => g.config = Some(PathBuf::from(it.next().ok_or("--config needs a path")?)),
             "--remote" => g.remote = Some(it.next().ok_or("--remote needs host:port")?),
@@ -145,6 +167,39 @@ pub fn parse(argv: Vec<String>) -> Result<(Global, Cmd), String> {
             definition: PathBuf::from(arg(0, "check <definition.json> [vectors.json]")?),
             vectors: opt(1).map(PathBuf::from),
         },
+        "air" => {
+            use crate::air::What;
+            let usage =
+                "air <color [brightness] | off | effect <1-12> [brightness] [speed] | line <0-5>>";
+            let byte = |i: usize, default: Option<u8>| -> Result<u8, String> {
+                match (opt(i), default) {
+                    (Some(s), _) => s
+                        .parse::<f64>()
+                        .map(|n| n.round().clamp(0.0, 255.0) as u8)
+                        .map_err(|_| format!("{s:?} is not a number")),
+                    (None, Some(d)) => Ok(d),
+                    (None, None) => Err(format!("usage: lampbus {usage}")),
+                }
+            };
+            let what = match arg(0, usage)? {
+                "off" => What::Off,
+                "line" => What::LineOrder(byte(1, None)?.min(5)),
+                "effect" => What::Effect {
+                    mode: byte(1, None)?.clamp(1, 12),
+                    brightness: byte(2, Some(100))?.min(100),
+                    speed: byte(3, Some(100))?.clamp(1, 100),
+                },
+                c => {
+                    let rgb =
+                        lampbus_render::color::parse(&color_arg(c)).map_err(|e| e.to_string())?;
+                    What::Colour {
+                        rgb: rgb.map(|v| v.round().clamp(0.0, 255.0) as u8),
+                        brightness: byte(1, Some(100))?.min(100),
+                    }
+                }
+            };
+            Cmd::Air { what }
+        }
         "calibrate" => Cmd::Calibrate(arg(0, "calibrate <brightness|ramp|low>")?.to_string()),
         "definitions" => Cmd::Definitions,
         "serve" => Cmd::Serve,
