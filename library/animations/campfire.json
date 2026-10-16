@@ -1,0 +1,1 @@
+{"description": "A campfire: restless red-orange flame, strong flicker. Chosen by eye on the author's lamp.", "title": "Campfire", "homekit": true, "type": "gen", "gen": "candle", "fps": 25, "params": {"color": "#ff3000", "flicker": 80}}

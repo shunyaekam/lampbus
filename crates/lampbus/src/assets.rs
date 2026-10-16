@@ -24,6 +24,10 @@ pub const ANIMATIONS: &[(&str, &str)] = &[
         include_str!("../../../library/animations/candle.json"),
     ),
     (
+        "campfire",
+        include_str!("../../../library/animations/campfire.json"),
+    ),
+    (
         "lava",
         include_str!("../../../library/animations/lava.json"),
     ),

@@ -1114,3 +1114,67 @@ fn effect_errors_list_what_is_valid_and_common_aliases_work() {
         );
     }
 }
+
+#[test]
+fn switching_a_playing_animation_off_at_any_moment_always_reaches_the_lamp() {
+    // found live: `off` right after an animation left one frame queued and never sent, with the link ready
+    let off = wire(ISTRIP, "off", &[("brightness", 75.0)]);
+    for offset in 0..80u64 {
+        let mut s = Sim::new(vec![dev("lamp", "SSL-E089ED", "S1")]);
+        s.all(Command::Play {
+            animation: animation(
+                json!({"type":"gen","gen":"candle","params":{"color":"#ff3000","flicker":80},"fps":25}),
+            ),
+            name: Some("campfire".into()),
+            brightness: Some(75.0),
+        });
+        s.advance(8_000 + offset);
+        let m = s.mark();
+        s.all(Command::Power(Some(false)));
+        s.advance(1_000);
+        let l = s.core.snapshot(s.now).lamps[0].clone();
+        assert_eq!(
+            l.pending, 0,
+            "offset {offset}: a frame is stuck in the queue"
+        );
+        assert!(!l.on, "offset {offset}");
+        let writes = s.writes_since(m, "S1");
+        assert!(
+            writes.iter().any(|w| w.len() == off.len()),
+            "offset {offset}: nothing was written after the off command"
+        );
+    }
+}
+
+#[test]
+fn the_published_snapshot_never_keeps_showing_a_frame_that_has_already_been_written() {
+    // The shell republishes only when `take_changed()` says so. Found live: an off that landed inside the write-pacing
+    // window after an animation frame was published as "1 pending", the frame was written a moment later, nothing
+    // marked the change, and the API showed "1 pending" until some other command arrived.
+    for offset in 0..60u64 {
+        let mut s = Sim::new(vec![dev("lamp", "SSL-E089ED", "S1")]);
+        s.all(Command::Play {
+            animation: animation(
+                json!({"type":"gen","gen":"candle","params":{"color":"#ff3000"},"fps":25}),
+            ),
+            name: None,
+            brightness: Some(75.0),
+        });
+        s.advance(3_000 + offset);
+        let _ = s.core.take_changed();
+        s.all(Command::Power(Some(false)));
+        // the shell publishes straight after handling a command
+        let _ = s.core.take_changed();
+        let mut shown = s.core.snapshot(s.now);
+        for _ in 0..200 {
+            s.advance(5);
+            if s.core.take_changed() {
+                shown = s.core.snapshot(s.now);
+            }
+        }
+        assert_eq!(
+            shown.lamps[0].pending, 0,
+            "offset {offset}: the published snapshot is stale"
+        );
+    }
+}

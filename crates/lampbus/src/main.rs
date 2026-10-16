@@ -323,7 +323,17 @@ async fn confirmed(r: &Remote, limit: Duration) -> Result<(), String> {
             let pending = l.get("pending").and_then(Value::as_u64).unwrap_or(0);
             let link = l.get("link").and_then(Value::as_str).unwrap_or("");
             let err = l.get("last_error").and_then(Value::as_str);
-            let settled = pending == 0 && err.is_none() && (link == "ready" || link == "down");
+            // an animation or a stream always has a frame in flight; it is delivered when the link is up and healthy
+            let playing = matches!(
+                l.get("source").and_then(Value::as_str),
+                Some("animation" | "stream")
+            );
+            let settled = err.is_none()
+                && if playing {
+                    link == "ready"
+                } else {
+                    pending == 0 && (link == "ready" || link == "down")
+                };
             (!settled).then(|| {
                 format!(
                     "{} is {link} ({})",

@@ -704,8 +704,14 @@ impl Core {
     fn pump(&mut self, now: Ms) {
         let cfg = self.cfg.clone();
         let mut need_scan = false;
+        // what is queued is part of the published state (`pending`): writing a frame is a visible change, even though
+        // no command or link event caused it (it was held back by write pacing)
+        let queued_before: Vec<usize> = self.lamps.iter().map(Lamp::pending).collect();
         for l in &mut self.lamps {
             need_scan |= l.pump(now, &cfg, &mut self.actions);
+        }
+        if !self.lamps.iter().map(Lamp::pending).eq(queued_before) {
+            self.changed = true;
         }
         if self.scanning && now >= self.scan_started + cfg.scan_timeout_ms {
             self.actions.push_back(Action::StopScan);
