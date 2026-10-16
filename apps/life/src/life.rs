@@ -89,6 +89,8 @@ pub struct Params {
     pub sway: f64,
     /// How much the hidden Game of Life bends the light (0 to 1).
     pub automaton: f64,
+    /// Pace of the hidden Game of Life, as a multiple (0.3 to 3).
+    pub tempo: f64,
 }
 
 impl Params {
@@ -105,6 +107,7 @@ impl Params {
         flicker: 0.0,
         sway: 0.0,
         automaton: 0.0,
+        tempo: 1.0,
     };
 
     /// A named mood.
@@ -124,6 +127,7 @@ impl Params {
                 flicker: 0.7,
                 sway: 8.0,
                 automaton: 0.0,
+                tempo: 1.0,
             },
             "calm" => Params {
                 breath_period: 10.0,
@@ -224,6 +228,7 @@ impl Params {
                 sway: 8.0,
                 stir_every: 150.0,
                 automaton: 1.0,
+                tempo: 1.6,
                 ..e
             },
             _ => return None,
@@ -242,6 +247,7 @@ impl Params {
             "flicker" => self.flicker = v.clamp(0.0, 1.0),
             "sway" => self.sway = v.clamp(0.0, 120.0),
             "automaton" => self.automaton = v.clamp(0.0, 1.0),
+            "tempo" => self.tempo = v.clamp(0.3, 3.0),
             "follow_day" => self.follow_day = v.clamp(0.0, 1.0),
             _ => return false,
         }
@@ -265,6 +271,7 @@ impl Params {
         m(&mut self.flicker, to.flicker);
         m(&mut self.sway, to.sway);
         m(&mut self.automaton, to.automaton);
+        m(&mut self.tempo, to.tempo);
     }
 }
 
@@ -359,7 +366,7 @@ const MOOD_TAU: f64 = 6.0;
 /// Seconds between generations of the hidden Game of Life (about three a second: slow enough to read as drift).
 const GENERATION: f64 = 0.35;
 /// Time constant, in seconds, of the smoothing of the grid's features.
-const FEATURE_TAU: f64 = 1.6;
+const FEATURE_TAU: f64 = 0.9;
 
 impl Life {
     pub fn new(seed: u64) -> Life {
@@ -391,15 +398,24 @@ impl Life {
     }
 
     /// Something happened. Repeated pokes within a minute count for less: `0.6^n`.
+    #[cfg(test)]
     pub fn poke(&mut self, t: f64, colour: [f64; 3]) {
+        self.poke_at(t, colour, None);
+    }
+
+    /// As [`Life::poke`], and in a Game-of-Life mood the glider is dropped into the given grid column, so that
+    /// different kinds of event push the hue in different, recognisable directions.
+    pub fn poke_at(&mut self, t: f64, colour: [f64; 3], column: Option<i32>) {
         let recent = self.pokes.iter().filter(|p| t - p.at < 60.0).count();
         let strength = 0.6f64.powi(i32::try_from(recent).unwrap_or(8));
         self.excitement = (self.excitement + 0.6 * strength * self.now.excitability).min(1.0);
         if self.now.automaton > 0.05 {
             // the world is touched: a glider is dropped into the hidden grid
             let rng = &mut self.rng;
-            let (x, y) = ((rng.next() * 10.0) as i32, (rng.next() * 10.0) as i32);
+            let x = column.unwrap_or((rng.next() * 10.0) as i32);
+            let y = (rng.next() * 10.0) as i32;
             self.grid.glider(x, y);
+            self.grid.glider(x, y + 5); // two, so the effect is strong enough to read
         }
         self.pokes.push(Poke {
             at: t,
@@ -429,7 +445,7 @@ impl Life {
         while t >= self.grid_next {
             let rng = &mut self.rng;
             self.grid.step_alive(&mut || rng.next());
-            self.grid_next += GENERATION;
+            self.grid_next += GENERATION / p.tempo.max(0.3);
         }
         let k = 1.0 - (-dt / FEATURE_TAU).exp();
         let (density, gathering) = self.grid.features();
@@ -441,7 +457,7 @@ impl Life {
         let wander = 1.0 + 0.25 * noise(self.seed, t / 40.0);
         let period = ((p.breath_period * wander)
             .clamp(p.breath_period * 0.6, p.breath_period * 1.4)
-            / (1.0 + 0.8 * e + 1.5 * a * self.activity))
+            / (1.0 + 0.8 * e + 2.5 * a * self.activity))
             .max(2.0);
         self.phase += dt / period;
         let breath = (TAU * self.phase).sin();
@@ -454,11 +470,11 @@ impl Life {
                 mix(p.colour[1], day[1]),
                 mix(p.colour[2], day[2]),
             ],
-            p.sway * noise(self.seed + 6, t / 35.0) + a * 70.0 * self.gathering,
+            p.sway * noise(self.seed + 6, t / 35.0) + a * 110.0 * self.gathering,
         );
         // a fuller grid is a little brighter, a sparser one a little dimmer
         let base_level =
-            mix(p.level, day_level) * (1.0 + a * 1.2 * (self.density - 0.25).clamp(-0.2, 0.3));
+            mix(p.level, day_level) * (1.0 + a * 2.0 * (self.density - 0.25).clamp(-0.2, 0.3));
         // fire: a small fast component, band-limited to 2.5 Hz so it never becomes a flash
         let fast = noise(self.seed + 4, t * 2.5) * 0.7 + noise(self.seed + 5, t * 1.1) * 0.3;
         let mut level = base_level
@@ -490,6 +506,18 @@ impl Life {
             rgb: rgb.map(|c| c.round().clamp(0.0, 255.0) as u8),
             level: level.clamp(0.0, max_level.clamp(0.0, 100.0)).round() as u8,
         }
+    }
+}
+
+/// Where in the hidden grid a kind of event drops its glider: left and right sit on opposite sides of the hue
+/// wheel's push, so different events read as different directions.
+pub fn poke_column(name: &str) -> Option<i32> {
+    match name {
+        "good" => Some(7),
+        "info" => Some(2),
+        "warn" => Some(5),
+        "bad" => Some(0),
+        _ => None,
     }
 }
 
@@ -638,6 +666,29 @@ mod tests {
         assert!(
             (m.pokes.last().map_or(0.0, |p| p.strength) - 1.0).abs() < 1e-9,
             "a poke after a quiet minute is fresh"
+        );
+    }
+
+    #[test]
+    fn in_the_game_of_life_mood_different_pokes_push_the_hue_different_ways() {
+        let hue_after = |name: &str| {
+            let mut l = Life::new(11);
+            *l.target_mut() = Params::mood("conway").unwrap();
+            l.now = Params::mood("conway").unwrap();
+            for i in 0..400 {
+                l.step(f64::from(i) / 20.0, 13.0, 100.0);
+            }
+            let before = l.gathering;
+            l.poke_at(20.0, poke_colour(name), poke_column(name));
+            for i in 0..80 {
+                l.step(20.0 + f64::from(i) / 20.0, 13.0, 100.0);
+            }
+            l.gathering - before
+        };
+        let (good, info) = (hue_after("good"), hue_after("info"));
+        assert!(
+            (good - info).abs() > 0.02,
+            "good and info move the hue differently: {good} vs {info}"
         );
     }
 
