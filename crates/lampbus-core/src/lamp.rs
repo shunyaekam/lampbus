@@ -4,10 +4,13 @@ use crate::lower::{lower, Frame, Out, Sent};
 use crate::{Action, Config, LevelCurve, Ms};
 use lampbus_defs::{Caps, Definition, Range};
 use lampbus_render::anim::Animation;
-use lampbus_render::color::Rgb;
+use lampbus_render::color::{mix, Rgb, Space};
 use lampbus_render::pipeline::{lightness_to_luminance, Calibration, Dither, Smoother};
 use std::collections::VecDeque;
 use std::sync::Arc;
+
+/// How often a fade renders a new step (about 30 per second; the write pacing keeps it under the lamp's limit).
+const FADE_STEP_MS: Ms = 33;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Link {
@@ -47,6 +50,13 @@ struct Stream {
     until: Ms,
 }
 
+/// A fade of what is shown, from one colour and level to another.
+struct Fade {
+    from: (Rgb, f64),
+    to: (Rgb, f64),
+    t0: Ms,
+}
+
 pub(crate) struct Lamp {
     pub id: Option<String>,
     pub alias: String,
@@ -73,6 +83,10 @@ pub(crate) struct Lamp {
     pub touched: bool,
     /// Streams are ignored until this time (a person took over).
     pub yield_until: Ms,
+    /// What is being shown, before quantising: colour and level (`0..=1`). `None` when unknown (a firmware effect).
+    shown: Option<(Rgb, f64)>,
+    fade: Option<Fade>,
+    fade_tick: Ms,
     /// Advertised name this lamp binds to when it has no id yet.
     pub bind_name: Option<String>,
     pub dirty: bool,
@@ -118,6 +132,9 @@ impl Lamp {
             lower_err: false,
             touched: false,
             yield_until: 0,
+            shown: None,
+            fade: None,
+            fade_tick: 0,
             bind_name: None,
             dirty: false,
         }
@@ -131,6 +148,10 @@ impl Lamp {
         self.look.on && self.look.anim.is_some()
     }
 
+    pub(crate) fn fading(&self) -> bool {
+        self.fade.is_some()
+    }
+
     pub(crate) fn pending(&self) -> usize {
         self.queue.len() + self.raw.len()
     }
@@ -141,7 +162,10 @@ impl Lamp {
 
     /// Whether the lamp needs a live connection right now.
     pub(crate) fn wants_link(&self, now: Ms) -> bool {
-        !self.nothing_queued() || self.animating() || (self.look.on && self.streaming(now))
+        !self.nothing_queued()
+            || self.animating()
+            || self.fade.is_some()
+            || (self.look.on && self.streaming(now))
     }
 
     pub(crate) fn source(&self, now: Ms) -> &'static str {
@@ -329,6 +353,41 @@ impl Lamp {
         }
     }
 
+    /// Move what is shown toward `target` over `cfg.transition_ms`, eased in and out and mixed in linear light. A new
+    /// target mid-fade starts from wherever the fade has got to, so a stream of changes (a slider drag) stays smooth.
+    /// With no transition configured, or nothing known to fade from, the change is instant.
+    fn transition(&mut self, now: Ms, target: (Rgb, f64), cfg: &Config) -> (Rgb, f64) {
+        let dur = cfg.transition_ms;
+        let Some(cur) = self.shown.filter(|_| dur > 0) else {
+            self.fade = None;
+            self.shown = Some(target);
+            return target;
+        };
+        if self.fade.as_ref().map_or(cur != target, |f| f.to != target) {
+            self.fade = Some(Fade {
+                from: cur,
+                to: target,
+                t0: now,
+            });
+        }
+        let Some(f) = &self.fade else {
+            return target;
+        };
+        let p = (now.saturating_sub(f.t0) as f64 / dur as f64).clamp(0.0, 1.0);
+        if p >= 1.0 {
+            self.fade = None;
+            self.shown = Some(target);
+            return target;
+        }
+        let e = p * p * (3.0 - 2.0 * p);
+        let v = (
+            mix(f.from.0, f.to.0, e, Space::Linear),
+            f.from.1 + (f.to.1 - f.from.1) * e,
+        );
+        self.shown = Some(v);
+        v
+    }
+
     /// Decide what the lamp should show now, lower it to frames, and replace the pending queue with them.
     pub(crate) fn rerender(&mut self, now: Ms, cfg: &Config) {
         self.dirty = false;
@@ -336,10 +395,22 @@ impl Lamp {
             return;
         }
         let master = self.look.brightness / 100.0;
+        let static_rgb = [
+            f64::from(self.look.rgb[0]),
+            f64::from(self.look.rgb[1]),
+            f64::from(self.look.rgb[2]),
+        ];
         let out = if !self.look.on {
             self.smoother.reset();
             self.last_smooth = None;
-            Out::Off
+            // fade out rather than cut: dim the colour that is showing, then switch off
+            let rgb = self.shown.map_or(static_rgb, |s| s.0);
+            let (rgb, level) = self.transition(now, (rgb, 0.0), cfg);
+            if level > 0.0 {
+                self.quantise_color(rgb, level, false, cfg)
+            } else {
+                Out::Off
+            }
         } else if let Some(s) = self.stream.as_ref().filter(|s| now < s.until) {
             let (rgb, level) = (s.rgb, s.level);
             let dt = self.last_smooth.map_or(0, |t| now.saturating_sub(t)) as f64;
@@ -347,20 +418,27 @@ impl Lamp {
             let [r, g, b, l] = self
                 .smoother
                 .step([rgb[0], rgb[1], rgb[2], level * 255.0], dt);
+            // a stream is already continuous: follow it, so a later change starts from where it was
+            self.fade = None;
+            self.shown = Some(([r, g, b], l / 255.0 * master));
             self.quantise_color([r, g, b], l / 255.0 * master, true, cfg)
         } else if let Some(run) = &self.look.anim {
             let s = run.anim.sample(now.saturating_sub(run.t0) as f64 / 1000.0);
+            self.fade = None;
+            self.shown = Some((s.rgb, s.level * master));
             self.quantise_color(s.rgb, s.level * master, true, cfg)
         } else if let Some((mode, speed)) = self.look.effect {
+            // a firmware effect cannot be faded, and what it shows is unknown
+            self.fade = None;
+            self.shown = None;
             self.effect_out(mode, speed, cfg)
         } else {
-            let rgb = [
-                f64::from(self.look.rgb[0]),
-                f64::from(self.look.rgb[1]),
-                f64::from(self.look.rgb[2]),
-            ];
-            self.quantise_color(rgb, master, false, cfg)
+            let (rgb, level) = self.transition(now, (static_rgb, master), cfg);
+            self.quantise_color(rgb, level, false, cfg)
         };
+        if self.fade.is_some() {
+            self.fade_tick = now + FADE_STEP_MS;
+        }
         match lower(&self.def, &self.caps, &self.sent, &out) {
             Ok(frames) => {
                 self.queue = frames.into();
@@ -468,6 +546,7 @@ impl Lamp {
             && cfg.idle_ms > 0
             && self.nothing_queued()
             && !self.animating()
+            && self.fade.is_none()
             && self.stream.is_none())
         .then(|| self.last_activity + cfg.idle_ms)
     }
@@ -483,6 +562,7 @@ impl Lamp {
         };
         [
             self.tick_due(),
+            self.fade.as_ref().map(|_| self.fade_tick),
             self.stream.as_ref().map(|s| s.until),
             write,
             link,
@@ -512,6 +592,9 @@ impl Lamp {
             if now >= due {
                 changed |= self.tick(now);
             }
+        }
+        if self.fade.is_some() && now >= self.fade_tick {
+            self.dirty = true; // the next step of a fade
         }
         if let Link::Connecting { since } = self.link {
             if now >= since + cfg.connect_timeout_ms {

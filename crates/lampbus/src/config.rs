@@ -21,6 +21,7 @@ struct File {
     auto_adopt: Option<bool>,
     idle_seconds: Option<f64>,
     stream_yield_seconds: Option<f64>,
+    transition_ms: Option<f64>,
     color_gamma: Option<f64>,
     white_balance: Option<[f64; 3]>,
     level_curve: Option<String>,
@@ -105,6 +106,10 @@ pub fn load(path: Option<&Path>) -> Result<Settings, String> {
     if let Some(s) = file.stream_yield_seconds {
         core.stream_yield_ms = (s.max(0.0) * 1000.0) as u64;
     }
+    // colour and brightness changes glide by default (0 turns it off): analog, not stepped
+    core.transition_ms = file
+        .transition_ms
+        .map_or(300, |ms| ms.clamp(0.0, 5_000.0) as u64);
     if let Some(g) = file.color_gamma {
         if !(0.1..=5.0).contains(&g) {
             return Err("color_gamma must be between 0.1 and 5".into());

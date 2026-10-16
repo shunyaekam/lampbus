@@ -328,7 +328,9 @@ async fn confirmed(r: &Remote, limit: Duration) -> Result<(), String> {
                 l.get("source").and_then(Value::as_str),
                 Some("animation" | "stream")
             );
+            let fading = l.get("fading").and_then(Value::as_bool) == Some(true);
             let settled = err.is_none()
+                && !fading
                 && if playing {
                     link == "ready"
                 } else {

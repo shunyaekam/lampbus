@@ -1230,3 +1230,163 @@ fn without_a_yield_a_stream_still_overrides_as_before() {
     }
     assert_eq!(s.core.snapshot(s.now).lamps[0].source, "stream");
 }
+
+fn fading_sim(ms: Ms) -> Sim {
+    Sim::with(Config {
+        devices: vec![dev("lamp", "SSL-E089ED", "S1")],
+        transition_ms: ms,
+        ..Config::default()
+    })
+}
+
+/// Writes to S1 after `from`, with the time each happened (relative to `t0`).
+fn timed_writes(s: &Sim, from: usize, t0: Ms) -> Vec<(Ms, Vec<u8>)> {
+    s.log[from..]
+        .iter()
+        .filter_map(|(t, e)| match e {
+            Ev::Write(d, b) if d == "S1" => Some((t - t0, b.clone())),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_colour_change_fades_in_many_steps_and_lands_exactly_on_the_target() {
+    let mut s = fading_sim(400);
+    s.all(color([255.0, 0.0, 0.0], Some(100.0)));
+    s.advance(1_000);
+    let (m, t0) = (s.mark(), s.now);
+    s.all(color([0.0, 0.0, 255.0], Some(100.0)));
+    s.advance(1_000);
+    let w = timed_writes(&s, m, t0);
+    assert!(
+        (8..=20).contains(&w.len()),
+        "about 30 steps a second for 0.4 s, got {}",
+        w.len()
+    );
+    assert!(
+        w.windows(2).all(|p| p[0].1 != p[1].1),
+        "every step is different"
+    );
+    let blue = wire(
+        ISTRIP,
+        "color",
+        &[("r", 0.0), ("g", 0.0), ("b", 255.0), ("brightness", 100.0)],
+    );
+    assert_eq!(
+        w.last().map(|x| &x.1),
+        Some(&blue),
+        "it lands exactly on the target"
+    );
+    assert!(
+        w.last().is_some_and(|x| x.0 <= 480),
+        "and within the transition time, not after: {:?}",
+        w.last().map(|x| x.0)
+    );
+    assert_eq!(s.core.snapshot(s.now).lamps[0].pending, 0);
+}
+
+#[test]
+fn switching_off_dims_before_it_cuts_and_switching_on_rises() {
+    let mut s = fading_sim(300);
+    s.all(color([255.0, 60.0, 0.0], Some(100.0)));
+    s.advance(1_000);
+    let (m, t0) = (s.mark(), s.now);
+    s.all(Command::Power(Some(false)));
+    s.advance(1_000);
+    let w = timed_writes(&s, m, t0);
+    assert!(w.len() >= 5, "a fade, not one cut: {} writes", w.len());
+    assert_eq!(
+        w.last().map(|x| &x.1),
+        Some(&wire(ISTRIP, "off", &[])),
+        "and then really off"
+    );
+    assert!(!s.core.snapshot(s.now).lamps[0].on);
+    let (m, t0) = (s.mark(), s.now);
+    s.all(Command::Power(Some(true)));
+    s.advance(1_000);
+    let w = timed_writes(&s, m, t0);
+    assert!(
+        w.len() >= 5,
+        "it rises instead of snapping on: {} writes",
+        w.len()
+    );
+    let back = wire(
+        ISTRIP,
+        "color",
+        &[("r", 255.0), ("g", 60.0), ("b", 0.0), ("brightness", 100.0)],
+    );
+    assert_eq!(w.last().map(|x| &x.1), Some(&back));
+}
+
+#[test]
+fn a_change_in_the_middle_of_a_fade_carries_on_and_ends_on_the_new_target() {
+    let mut s = fading_sim(400);
+    s.all(color([255.0, 0.0, 0.0], Some(100.0)));
+    s.advance(1_000);
+    s.all(color([0.0, 0.0, 255.0], Some(100.0)));
+    s.advance(150);
+    let m = s.mark();
+    s.all(color([0.0, 255.0, 0.0], Some(100.0)));
+    s.advance(1_000);
+    let w = s.writes_since(m, "S1");
+    assert!(w.len() >= 6, "the second fade also has steps: {}", w.len());
+    let green = wire(
+        ISTRIP,
+        "color",
+        &[("r", 0.0), ("g", 255.0), ("b", 0.0), ("brightness", 100.0)],
+    );
+    assert_eq!(w.last(), Some(&green));
+}
+
+#[test]
+fn brightness_changes_fade_too_and_unchanged_state_sends_nothing() {
+    let mut s = fading_sim(300);
+    s.all(color([255.0, 100.0, 0.0], Some(100.0)));
+    s.advance(1_000);
+    let m = s.mark();
+    s.all(Command::Brightness(20.0));
+    s.advance(1_000);
+    assert!(s.writes_since(m, "S1").len() >= 5, "a slider move glides");
+    let m = s.mark();
+    s.advance(5_000);
+    assert!(
+        s.writes_since(m, "S1").is_empty(),
+        "nothing is sent once it has settled"
+    );
+}
+
+#[test]
+fn no_transition_means_one_instant_frame_as_before() {
+    let mut s = fading_sim(0);
+    s.all(color([255.0, 0.0, 0.0], Some(100.0)));
+    s.advance(1_000);
+    let m = s.mark();
+    s.all(color([0.0, 0.0, 255.0], Some(100.0)));
+    s.advance(1_000);
+    assert_eq!(s.writes_since(m, "S1").len(), 1);
+}
+
+#[test]
+fn the_published_snapshot_stops_saying_fading_when_the_fade_ends() {
+    // the shell republishes only when `take_changed()` says so; the end of a fade must count as a change
+    let mut s = fading_sim(300);
+    s.all(color([255.0, 0.0, 0.0], Some(100.0)));
+    s.advance(1_000);
+    let _ = s.core.take_changed();
+    s.all(color([0.0, 0.0, 255.0], Some(100.0)));
+    let _ = s.core.take_changed();
+    let mut shown = s.core.snapshot(s.now);
+    assert!(shown.lamps[0].fading, "a fade starts");
+    for _ in 0..200 {
+        s.advance(5);
+        if s.core.take_changed() {
+            shown = s.core.snapshot(s.now);
+        }
+    }
+    assert!(
+        !shown.lamps[0].fading,
+        "the published state says the fade is over"
+    );
+    assert_eq!(shown.lamps[0].pending, 0);
+}

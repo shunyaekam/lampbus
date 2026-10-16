@@ -97,7 +97,9 @@ impl Handle {
                 .collect();
             // a playing animation or stream always has a frame in flight: it is delivered when the link is up
             let delivered = |l: &&lampbus_core::LampState| {
-                l.connected && (l.pending == 0 || matches!(l.source, "animation" | "stream"))
+                l.connected
+                    && !l.fading
+                    && (l.pending == 0 || matches!(l.source, "animation" | "stream"))
             };
             if !relevant.is_empty() && relevant.iter().all(delivered) {
                 return Ok(s);

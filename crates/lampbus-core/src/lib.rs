@@ -72,6 +72,9 @@ pub struct Config {
     /// After a person sends a colour, effect or animation, ignore live streams for this long (0 = never). Turning the
     /// lamp on ends the pause. Lets an ambient program such as `lampbus-life` coexist with human control.
     pub stream_yield_ms: Ms,
+    /// Fade between colours and brightness levels over this long (0 = change instantly). Eased in and out and mixed in
+    /// linear light, so every change, from any door, looks analog rather than stepped.
+    pub transition_ms: Ms,
     /// Give up on a connect after this long.
     pub connect_timeout_ms: Ms,
     /// Stop scanning after this long.
@@ -101,6 +104,7 @@ impl Default for Config {
             min_write_interval_ms: 25,
             stream_timeout_ms: 2_000,
             stream_yield_ms: 0,
+            transition_ms: 0,
             connect_timeout_ms: 30_000,
             scan_timeout_ms: 15_000,
             color_gamma: 1.0,
@@ -312,6 +316,8 @@ pub struct LampState {
     pub link: &'static str,
     /// Whether commands can be written right now.
     pub connected: bool,
+    /// A fade between colours is in progress.
+    pub fading: bool,
     /// Whether a command has been given since start. Before that, `on`, `rgb` and `brightness` are defaults, not
     /// what the lamp is doing: after a restart nobody knows.
     pub known: bool,
@@ -715,13 +721,14 @@ impl Core {
     fn pump(&mut self, now: Ms) {
         let cfg = self.cfg.clone();
         let mut need_scan = false;
-        // what is queued is part of the published state (`pending`): writing a frame is a visible change, even though
-        // no command or link event caused it (it was held back by write pacing)
-        let queued_before: Vec<usize> = self.lamps.iter().map(Lamp::pending).collect();
+        // what is queued, and whether a fade is running, are part of the published state (`pending`, `fading`): writing a
+        // frame or finishing a fade is a visible change even though no command or link event caused it
+        let progress = |l: &Lamp| (l.pending(), l.fading());
+        let queued_before: Vec<(usize, bool)> = self.lamps.iter().map(progress).collect();
         for l in &mut self.lamps {
             need_scan |= l.pump(now, &cfg, &mut self.actions);
         }
-        if !self.lamps.iter().map(Lamp::pending).eq(queued_before) {
+        if !self.lamps.iter().map(progress).eq(queued_before) {
             self.changed = true;
         }
         if self.scanning && now >= self.scan_started + cfg.scan_timeout_ms {
@@ -788,6 +795,7 @@ impl Core {
                     link,
                     connected: l.link == Link::Ready,
                     known: l.touched,
+                    fading: l.fading(),
                     on: l.look.on,
                     rgb: l.look.rgb,
                     brightness: l.look.brightness.round() as u8,
