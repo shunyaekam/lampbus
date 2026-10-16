@@ -335,11 +335,87 @@ pub fn noise(seed: u64, x: f64) -> f64 {
     a + (b - a) * f
 }
 
+/// How an event looks: its colour is separate; this is its shape in time, so that kinds of event can be told apart
+/// by counting, not only by colour.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Signature {
+    /// Number of pulses.
+    pub pulses: u8,
+    /// Seconds between pulses.
+    pub spacing: f64,
+    /// Decay time constant of each pulse, seconds.
+    pub decay: f64,
+    /// Brightness added at the peak, in percent of full scale.
+    pub boost: f64,
+}
+
+impl Signature {
+    /// One soft swell.
+    pub const SWELL: Signature = Signature {
+        pulses: 1,
+        spacing: 0.0,
+        decay: 2.5,
+        boost: 40.0,
+    };
+
+    /// The envelope at `age` seconds after the event (0 to 1): each pulse rises in 0.18 s, then fades.
+    fn envelope(&self, age: f64) -> f64 {
+        (0..self.pulses)
+            .map(|i| {
+                let a = age - f64::from(i) * self.spacing;
+                if a < 0.0 {
+                    0.0
+                } else if a < 0.18 {
+                    a / 0.18
+                } else {
+                    (-(a - 0.18) / self.decay).exp()
+                }
+            })
+            .fold(0.0, f64::max)
+    }
+}
+
+/// The shape of each kind of event: good is one swell, info two blinks, warn three, bad one long red surge. Pulses are
+/// at least 0.8 s apart, so nothing here approaches a flicker.
+pub fn signature(name: &str) -> Signature {
+    match name {
+        "good" => Signature {
+            pulses: 1,
+            spacing: 0.0,
+            decay: 2.2,
+            boost: 45.0,
+        },
+        "info" => Signature {
+            pulses: 2,
+            spacing: 0.9,
+            decay: 0.45,
+            boost: 40.0,
+        },
+        "warn" => Signature {
+            pulses: 3,
+            spacing: 1.0,
+            decay: 0.4,
+            boost: 45.0,
+        },
+        "bad" => Signature {
+            pulses: 1,
+            spacing: 0.0,
+            decay: 4.5,
+            boost: 55.0,
+        },
+        _ => Signature::SWELL,
+    }
+}
+
 struct Poke {
     at: f64,
     colour: [f64; 3],
     strength: f64,
+    sig: Signature,
 }
+
+/// How far above the ambient ceiling an event may reach at its peak, in percent of full scale.
+const EVENT_HEADROOM: f64 = 25.0;
 
 /// The creature.
 pub struct Life {
@@ -405,7 +481,13 @@ impl Life {
 
     /// As [`Life::poke`], and in a Game-of-Life mood the glider is dropped into the given grid column, so that
     /// different kinds of event push the hue in different, recognisable directions.
+    #[cfg(test)]
     pub fn poke_at(&mut self, t: f64, colour: [f64; 3], column: Option<i32>) {
+        self.poke_signed(t, colour, column, Signature::SWELL);
+    }
+
+    /// As [`Life::poke_at`], with the event's shape in time.
+    pub fn poke_signed(&mut self, t: f64, colour: [f64; 3], column: Option<i32>, sig: Signature) {
         let recent = self.pokes.iter().filter(|p| t - p.at < 60.0).count();
         let strength = 0.6f64.powi(i32::try_from(recent).unwrap_or(8));
         self.excitement = (self.excitement + 0.6 * strength * self.now.excitability).min(1.0);
@@ -421,6 +503,7 @@ impl Life {
             at: t,
             colour,
             strength,
+            sig,
         });
         self.pokes.retain(|p| t - p.at < 60.0);
     }
@@ -489,22 +572,20 @@ impl Life {
                 + 14.0 * p.flicker * fast,
             base[2] + 6.0 * p.drift * noise(self.seed + 3, t / 67.0),
         ];
+        let mut peak: f64 = 0.0;
         for k in &self.pokes {
-            let age = t - k.at;
-            let env = if age < 0.25 {
-                age / 0.25
-            } else {
-                (-(age - 0.25) / 2.5).exp()
-            };
-            let w = (k.strength * env).clamp(0.0, 1.0);
+            let w = (k.strength * k.sig.envelope(t - k.at)).clamp(0.0, 1.0);
             for (c, to) in rgb.iter_mut().zip(k.colour) {
                 *c += (to - *c) * w;
             }
-            level += 40.0 * w;
+            level += k.sig.boost * w;
+            peak = peak.max(w);
         }
+        // the ceiling is for the ambient light; an event may reach a little above it, so it can still be seen
+        let ceiling = (max_level.clamp(0.0, 100.0) + EVENT_HEADROOM * peak).min(100.0);
         Frame {
             rgb: rgb.map(|c| c.round().clamp(0.0, 255.0) as u8),
-            level: level.clamp(0.0, max_level.clamp(0.0, 100.0)).round() as u8,
+            level: level.clamp(0.0, ceiling).round() as u8,
         }
     }
 }
@@ -590,7 +671,11 @@ mod tests {
                     l.poke(t, poke_colour("bad"));
                 }
                 let f = l.step(t, 14.0, 40.0);
-                assert!(f.level <= 40, "{mood}: level {} at {t}", f.level);
+                assert!(
+                    f.level <= 65,
+                    "{mood}: even an event stays under the headroom: {} at {t}",
+                    f.level
+                );
             }
         }
     }
@@ -704,6 +789,71 @@ mod tests {
         );
         let later = l.step(40.0, 13.0, 100.0);
         assert!(later.rgb[1] < peak.rgb[1], "it fades");
+    }
+
+    #[test]
+    fn the_ambient_ceiling_holds_when_nothing_has_happened() {
+        for mood in [
+            "ember", "campfire", "calm", "focus", "ocean", "night", "aurora", "forest", "dusk",
+            "sunset", "bloom", "conway",
+        ] {
+            let mut l = Life::new(9);
+            *l.target_mut() = Params::mood(mood).unwrap();
+            for i in 0..4000 {
+                let f = l.step(f64::from(i) / 20.0, 14.0, 40.0);
+                assert!(
+                    f.level <= 40,
+                    "{mood}: ambient level {} at step {i}",
+                    f.level
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn each_kind_of_event_can_be_told_apart_by_counting_its_pulses() {
+        let peaks = |name: &str| {
+            let s = signature(name);
+            let env: Vec<f64> = (0..200).map(|i| s.envelope(f64::from(i) * 0.05)).collect();
+            env.windows(3)
+                .filter(|w| w[1] > w[0] && w[1] >= w[2] && w[1] > 0.5)
+                .count()
+        };
+        assert_eq!(
+            (peaks("good"), peaks("info"), peaks("warn"), peaks("bad")),
+            (1, 2, 3, 1)
+        );
+        for name in ["good", "info", "warn", "bad", "other"] {
+            let s = signature(name);
+            assert!(
+                s.pulses == 1 || s.spacing >= 0.8,
+                "{name}: pulses at least 0.8 s apart, never a flicker"
+            );
+        }
+    }
+
+    #[test]
+    fn an_event_is_clearly_visible_above_the_ambient_light_even_at_the_ceiling() {
+        let mut l = Life::new(2);
+        for i in 0..400 {
+            l.step(f64::from(i) / 20.0, 14.0, 40.0);
+        }
+        let before = l.step(20.0, 14.0, 40.0);
+        l.poke_signed(
+            20.0,
+            poke_colour("good"),
+            poke_column("good"),
+            signature("good"),
+        );
+        let peak = (0..60)
+            .map(|i| l.step(20.0 + f64::from(i) / 20.0, 14.0, 40.0).level)
+            .max()
+            .unwrap();
+        assert!(
+            i32::from(peak) - i32::from(before.level) >= 12,
+            "the swell is at least 12 percent brighter: {} -> {peak}",
+            before.level
+        );
     }
 
     #[test]

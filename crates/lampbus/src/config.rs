@@ -22,6 +22,7 @@ struct File {
     idle_seconds: Option<f64>,
     stream_yield_seconds: Option<f64>,
     transition_ms: Option<f64>,
+    split_brightness: Option<bool>,
     color_gamma: Option<f64>,
     white_balance: Option<[f64; 3]>,
     level_curve: Option<String>,
@@ -103,6 +104,7 @@ pub fn load(path: Option<&Path>) -> Result<Settings, String> {
     if let Some(s) = file.idle_seconds {
         core.idle_ms = (s.max(0.0) * 1000.0) as u64;
     }
+    core.split_brightness = file.split_brightness.unwrap_or(true);
     if let Some(s) = file.stream_yield_seconds {
         core.stream_yield_ms = (s.max(0.0) * 1000.0) as u64;
     }

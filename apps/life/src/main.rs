@@ -8,7 +8,7 @@
 mod automaton;
 mod life;
 
-use life::{poke_colour, poke_column, Life, Params};
+use life::{poke_colour, poke_column, signature, Life, Params};
 use std::net::UdpSocket;
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -128,7 +128,9 @@ fn command(state: &mut State, t: f64, line: &str) -> Option<String> {
     match (w.next()?, w.next(), w.next()) {
         ("poke", name, _) => {
             let name = name.unwrap_or("info");
-            state.life.poke_at(t, poke_colour(name), poke_column(name));
+            state
+                .life
+                .poke_signed(t, poke_colour(name), poke_column(name), signature(name));
             None
         }
         ("mood", Some(name), _) => match Params::mood(name) {

@@ -12,6 +12,17 @@ use std::sync::Arc;
 /// How often a fade renders a new step (about 30 per second; the write pacing keeps it under the lamp's limit).
 const FADE_STEP_MS: Ms = 33;
 
+/// Express `units` of a brightness range (`0..=max`) as a brightness byte rounded up plus a scale on the colour, so the
+/// product is exact to the colour channels' resolution instead of the byte's. Returns the scaled colour and the byte.
+fn split_brightness(rgb: Rgb, units: f64, max: f64) -> (Rgb, f64) {
+    if units <= 0.0 || max <= 0.0 {
+        return (rgb, 0.0);
+    }
+    let byte = units.ceil().min(max);
+    let s = (units / byte).clamp(0.0, 1.0);
+    ([rgb[0] * s, rgb[1] * s, rgb[2] * s], byte)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Link {
     /// Not connected, and not trying.
@@ -303,10 +314,19 @@ impl Lamp {
             .and_then(|c| c.brightness)
             .or_else(|| self.caps.brightness.as_ref().map(|b| b.range));
         let (quad, max) = match range {
-            Some(r) => (
-                [rgb[0], rgb[1], rgb[2], level_units(r, level)],
-                [255, 255, 255, r.max.clamp(0.0, 255.0) as u8],
-            ),
+            Some(r) => {
+                let units = level_units(r, level);
+                let combined = color.is_some_and(|c| c.brightness.is_some());
+                let (rgb, units) = if cfg.split_brightness && combined {
+                    split_brightness(rgb, units, r.max)
+                } else {
+                    (rgb, units)
+                };
+                (
+                    [rgb[0], rgb[1], rgb[2], units],
+                    [255, 255, 255, r.max.clamp(0.0, 255.0) as u8],
+                )
+            }
             // no brightness control: scale the colour itself
             None => (
                 [rgb[0] * level, rgb[1] * level, rgb[2] * level, 0.0],
@@ -643,5 +663,61 @@ impl Lamp {
             }
         }
         finished
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_split_is_exact_and_never_brightens_the_colour() {
+        let rgb = [255.0, 120.0, 10.0];
+        let mut units = 0.0;
+        while units <= 100.0 {
+            let (c, byte) = split_brightness(rgb, units, 100.0);
+            assert!(
+                byte >= units && byte <= 100.0 && byte.fract() == 0.0,
+                "{units}: byte {byte}"
+            );
+            assert!(
+                c.iter().zip(rgb).all(|(a, b)| *a <= b + 1e-9),
+                "{units}: the colour is only ever scaled down"
+            );
+            if units > 0.0 {
+                let product = byte * c[0] / rgb[0];
+                assert!(
+                    (product - units).abs() < 1e-9,
+                    "{units}: byte and colour multiply back to it, got {product}"
+                );
+            }
+            units += 0.173;
+        }
+    }
+
+    #[test]
+    fn rounded_to_the_colour_channels_the_error_is_far_below_one_brightness_step() {
+        // brightness byte alone: up to 0.5 units of error. Split: bounded by half a colour step at the scaled value.
+        let rgb = [255.0, 0.0, 0.0];
+        let mut worst: f64 = 0.0;
+        let mut units = 1.0;
+        while units < 100.0 {
+            let (c, byte) = split_brightness(rgb, units, 100.0);
+            let shown = byte * c[0].round() / 255.0;
+            worst = worst.max((shown - units).abs());
+            units += 0.0731;
+        }
+        assert!(
+            worst < 0.2,
+            "worst error {worst} brightness units (the byte alone would be up to 0.5)"
+        );
+    }
+
+    #[test]
+    fn nothing_to_split_when_off() {
+        assert_eq!(
+            split_brightness([1.0, 2.0, 3.0], 0.0, 100.0),
+            ([1.0, 2.0, 3.0], 0.0)
+        );
     }
 }

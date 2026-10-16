@@ -1390,3 +1390,38 @@ fn the_published_snapshot_stops_saying_fading_when_the_fade_ends() {
     );
     assert_eq!(shown.lamps[0].pending, 0);
 }
+
+#[test]
+fn splitting_brightness_gives_a_slow_ramp_many_more_distinct_steps() {
+    let ramp = |split: bool| {
+        let mut s = Sim::with(Config {
+            devices: vec![dev("lamp", "SSL-E089ED", "S1")],
+            split_brightness: split,
+            ..Config::default()
+        });
+        s.all(color([255.0, 100.0, 0.0], Some(100.0)));
+        s.advance(500);
+        s.all(Command::Power(Some(true)));
+        let m = s.mark();
+        for i in 0..60 {
+            // a slow rise from 20% to 22%: two whole brightness steps in sixty frames
+            s.all(Command::Stream {
+                rgb: [255.0, 100.0, 0.0],
+                brightness: 20.0 + f64::from(i) * 0.035,
+            });
+            s.advance(50);
+        }
+        let w = s.writes_since(m, "S1");
+        let distinct: std::collections::BTreeSet<_> = w.iter().cloned().collect();
+        distinct.len()
+    };
+    let (coarse, fine) = (ramp(false), ramp(true));
+    assert!(
+        coarse <= 6,
+        "the brightness byte alone steps only a few times: {coarse}"
+    );
+    assert!(
+        fine >= coarse * 4,
+        "split across the colour channels: {fine} steps against {coarse}"
+    );
+}

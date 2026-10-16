@@ -75,6 +75,9 @@ pub struct Config {
     /// Fade between colours and brightness levels over this long (0 = change instantly). Eased in and out and mixed in
     /// linear light, so every change, from any door, looks analog rather than stepped.
     pub transition_ms: Ms,
+    /// Spread brightness over both the brightness byte and the colour channels (rounding the byte up and scaling the
+    /// colour down), giving far finer steps than the byte alone. Only for lamps whose colour frame carries brightness.
+    pub split_brightness: bool,
     /// Give up on a connect after this long.
     pub connect_timeout_ms: Ms,
     /// Stop scanning after this long.
@@ -105,6 +108,7 @@ impl Default for Config {
             stream_timeout_ms: 2_000,
             stream_yield_ms: 0,
             transition_ms: 0,
+            split_brightness: false,
             connect_timeout_ms: 30_000,
             scan_timeout_ms: 15_000,
             color_gamma: 1.0,
