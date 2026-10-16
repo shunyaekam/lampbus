@@ -78,8 +78,17 @@ fn parse(args: Vec<String>) -> Result<Option<Opts>, String> {
 
 #[cfg(target_os = "macos")]
 mod capture {
+    use core_foundation::base::TCFType;
+    use core_foundation::string::CFString;
     use core_graphics::access::ScreenCaptureAccess;
+    use core_graphics::base::{kCGBitmapByteOrder32Little, kCGImageAlphaPremultipliedFirst};
+    use core_graphics::color_space::CGColorSpace;
+    use core_graphics::context::{CGContext, CGInterpolationQuality};
     use core_graphics::display::CGDisplay;
+    use core_graphics::geometry::{CGPoint, CGRect, CGSize};
+
+    /// Width of the picture handed to the analysis: it samples a 64-column grid, so more than this is wasted.
+    const WIDTH: usize = 512;
 
     pub struct Shot {
         pub bytes: Vec<u8>,
@@ -97,17 +106,36 @@ mod capture {
         ScreenCaptureAccess.request()
     }
 
+    /// The main display as BGRA, drawn into an sRGB bitmap so macOS does the colour management. The raw capture is in the
+    /// display's own space (Display P3 on most Macs), which read as sRGB washes every colour towards white: pure green
+    /// arrives as (117, 251, 76).
     pub fn grab() -> Option<Shot> {
         let img = CGDisplay::main().image()?;
-        if img.bits_per_pixel() != 32 {
-            return None;
-        }
-        let data = img.data();
+        let width = img.width().min(WIDTH);
+        let height = (img.height() * width / img.width().max(1)).max(1);
+        let name = CFString::new("kCGColorSpaceSRGB");
+        let space = CGColorSpace::create_with_name(name.as_concrete_TypeRef())?;
+        let mut ctx = CGContext::create_bitmap_context(
+            None,
+            width,
+            height,
+            8,
+            width * 4,
+            &space,
+            kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little,
+        );
+        ctx.set_interpolation_quality(CGInterpolationQuality::CGInterpolationQualityNone);
+        let rect = CGRect::new(
+            &CGPoint::new(0.0, 0.0),
+            &CGSize::new(width as f64, height as f64),
+        );
+        ctx.draw_image(rect, &img);
+        let stride = ctx.bytes_per_row();
         Some(Shot {
-            bytes: data.bytes().to_vec(),
-            width: img.width(),
-            height: img.height(),
-            stride: img.bytes_per_row(),
+            bytes: ctx.data().to_vec(),
+            width,
+            height,
+            stride,
         })
     }
 }
@@ -131,6 +159,9 @@ mod capture {
     }
 }
 
+/// How long a still screen may go without a frame being sent (the core waits 2 s before it drops a stream).
+const REPEAT: Duration = Duration::from_millis(500);
+
 fn run(o: &Opts) -> Result<(), String> {
     if cfg!(not(target_os = "macos")) {
         return Err("lampbus-screen currently supports macOS only".into());
@@ -145,6 +176,7 @@ fn run(o: &Opts) -> Result<(), String> {
     let sock = UdpSocket::bind("0.0.0.0:0").map_err(|e| e.to_string())?;
     let period = Duration::from_secs_f64(1.0 / o.fps);
     let mut last = None;
+    let mut last_sent = Instant::now();
     let mut last_hold: Option<Instant> = None;
     loop {
         let started = Instant::now();
@@ -181,8 +213,11 @@ fn run(o: &Opts) -> Result<(), String> {
                 last_hold = Some(Instant::now());
             }
         }
-        if last != Some(f) {
+        // an unchanged screen is repeated too: the lamp drops a stream that has been quiet for a couple of seconds and
+        // falls back to whatever was under it, which is a lamp that turns white on every still scene
+        if last != Some(f) || last_sent.elapsed() >= REPEAT {
             last = Some(f);
+            last_sent = Instant::now();
             let [hi, lo] = ((f.level * 100.0).round().clamp(0.0, 10_000.0) as u16).to_be_bytes();
             sock.send_to(&[f.rgb[0], f.rgb[1], f.rgb[2], hi, lo], &o.to)
                 .map_err(|e| format!("send to {}: {e}", o.to))?;

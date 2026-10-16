@@ -5,7 +5,7 @@ use crate::{Action, Config, LevelCurve, Ms};
 use lampbus_defs::{Caps, Definition, Range};
 use lampbus_render::anim::Animation;
 use lampbus_render::color::{mix, Rgb, Space};
-use lampbus_render::pipeline::{lightness_to_luminance, Calibration, Dither, Smoother};
+use lampbus_render::pipeline::{lightness_to_luminance, Calibration, ColourSmoother, Dither};
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -85,7 +85,7 @@ pub(crate) struct Lamp {
     last_activity: Ms,
     backoff_ms: Ms,
     stream: Option<Stream>,
-    smoother: Smoother,
+    smoother: ColourSmoother,
     last_smooth: Option<Ms>,
     dither: Dither,
     /// Whether the last error came from lowering (so a later successful lowering may clear it).
@@ -137,7 +137,7 @@ impl Lamp {
             last_activity: 0,
             backoff_ms: 0,
             stream: None,
-            smoother: Smoother::new(cfg.stream_attack_ms, cfg.stream_release_ms),
+            smoother: ColourSmoother::new(cfg.stream_attack_ms, cfg.stream_release_ms),
             last_smooth: None,
             dither: Dither::new(),
             lower_err: false,

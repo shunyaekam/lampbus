@@ -1521,6 +1521,7 @@ version = "0.0.1"
 name = "lampbus-core"
 version = "0.0.1"
 dependencies = [
+ "aes",
  "lampbus-defs",
  "lampbus-render",
  "serde",
@@ -1585,6 +1586,7 @@ dependencies = [
 name = "lampbus-screen"
 version = "0.0.1"
 dependencies = [
+ "core-foundation",
  "core-graphics",
  "lampbus-render",
 ]

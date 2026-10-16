@@ -1425,3 +1425,55 @@ fn splitting_brightness_gives_a_slow_ramp_many_more_distinct_steps() {
         "split across the colour channels: {fine} steps against {coarse}"
     );
 }
+
+#[test]
+fn a_stream_switching_between_far_colours_never_passes_through_white() {
+    use aes::cipher::{Array, BlockCipherDecrypt, KeyInit};
+    let key: [u8; 16] = [
+        0x34, 0x52, 0x2a, 0x5b, 0x7a, 0x6e, 0x49, 0x2c, 0x08, 0x09, 0x0a, 0x9d, 0x8d, 0x2a, 0x23,
+        0xf8,
+    ];
+    let cipher = aes::Aes128::new(&Array::from(key));
+    let mut s = Sim::with(Config {
+        devices: vec![dev("lamp", "SSL-E089ED", "S1")],
+        transition_ms: 300,
+        split_brightness: true,
+        white_balance: [0.85, 1.0, 0.75],
+        stream_yield_ms: 3_600_000,
+        ..Config::default()
+    });
+    s.all(Command::Power(Some(true)));
+    s.advance(1_000);
+    for (from, to) in [
+        ([255.0, 0.0, 0.0], [0.0, 255.0, 0.0]),
+        ([0.0, 0.0, 255.0], [255.0, 224.0, 0.0]),
+    ] {
+        for _ in 0..20 {
+            s.all(Command::Stream {
+                rgb: from,
+                brightness: 100.0,
+            });
+            s.advance(66);
+        }
+        let m = s.mark();
+        let t0 = s.now;
+        for _ in 0..20 {
+            s.all(Command::Stream {
+                rgb: to,
+                brightness: 100.0,
+            });
+            s.advance(66);
+        }
+        for (t, b) in timed_writes(&s, m, t0) {
+            let mut blk = Array::from(<[u8; 16]>::try_from(&b[..16]).unwrap());
+            cipher.decrypt_block(&mut blk);
+            assert_eq!(blk[4], 2, "a colour frame");
+            let [r, g, b] = [blk[7], blk[8], blk[9]].map(f64::from);
+            let sat = (r.max(g).max(b) - r.min(g).min(b)) / r.max(g).max(b).max(1.0);
+            assert!(
+                sat > 0.85,
+                "{t} ms: ({r}, {g}, {b}) is washed out on the way from {from:?} to {to:?}"
+            );
+        }
+    }
+}
