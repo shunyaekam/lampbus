@@ -65,6 +65,11 @@ Short, dated, with the reason. A decision can be reversed; write a new entry ins
 - **D23. The lamp has two clocks we can use.** Command 4 programs the lamp's own on/off times (verified 2026-10-15:
   off at a clock time, and on, which turns the lamp on at full brightness in the firmware's default white, ignoring
   `white_balance`). The lamp reports nothing when they fire, so lampbus does not know; D22 limits the damage.
+- **D24. The over-the-air frame layer is a separate, dependency-free, `no_std` crate.** `lampbus-air` is the vendor's
+  broadcast encoder reimplemented and verified against the real native library (run under CPU emulation, outside the
+  repository; the library itself is never redistributed): the same bytes on 300 randomised trials and in the committed
+  golden vectors. It is the piece that lets a phone, an ESP32 or a Linux host drive a lamp with no connection, and
+  that decodes the lamp's own status advertisements. Not yet proven: that a lamp acts on frames we advertise.
 
 ## Open
 
