@@ -8,6 +8,7 @@
 //! A **mood** is a set of [`Params`]. The creature never jumps to a new mood: its current parameters ease toward the
 //! target, so a change takes about fifteen seconds and always looks continuous. Nothing modulates faster than 3 Hz.
 
+use crate::automaton::Grid;
 use std::f64::consts::TAU;
 
 /// What to show.
@@ -86,6 +87,8 @@ pub struct Params {
     pub flicker: f64,
     /// Degrees the hue slowly wanders either side of the colour (0 to 120): what makes an aurora move through colours.
     pub sway: f64,
+    /// How much the hidden Game of Life bends the light (0 to 1).
+    pub automaton: f64,
 }
 
 impl Params {
@@ -101,6 +104,7 @@ impl Params {
         excitability: 1.0,
         flicker: 0.0,
         sway: 0.0,
+        automaton: 0.0,
     };
 
     /// A named mood.
@@ -119,6 +123,7 @@ impl Params {
                 excitability: 1.3,
                 flicker: 0.7,
                 sway: 8.0,
+                automaton: 0.0,
             },
             "calm" => Params {
                 breath_period: 10.0,
@@ -208,6 +213,19 @@ impl Params {
                 stir_every: 60.0,
                 ..e
             },
+            // a hidden Game of Life drives density, hue and pace
+            "conway" => Params {
+                follow_day: 0.0,
+                colour: [70.0, 170.0, 215.0],
+                level: 32.0,
+                breath_period: 8.0,
+                breath_depth: 0.07,
+                drift: 0.5,
+                sway: 8.0,
+                stir_every: 150.0,
+                automaton: 1.0,
+                ..e
+            },
             _ => return None,
         })
     }
@@ -223,6 +241,7 @@ impl Params {
             "excitability" => self.excitability = v.clamp(0.0, 2.0),
             "flicker" => self.flicker = v.clamp(0.0, 1.0),
             "sway" => self.sway = v.clamp(0.0, 120.0),
+            "automaton" => self.automaton = v.clamp(0.0, 1.0),
             "follow_day" => self.follow_day = v.clamp(0.0, 1.0),
             _ => return false,
         }
@@ -245,6 +264,7 @@ impl Params {
         m(&mut self.excitability, to.excitability);
         m(&mut self.flicker, to.flicker);
         m(&mut self.sway, to.sway);
+        m(&mut self.automaton, to.automaton);
     }
 }
 
@@ -325,15 +345,28 @@ pub struct Life {
     pokes: Vec<Poke>,
     now: Params,
     target: Params,
+    /// The hidden Game of Life, when its next generation is due, and its features smoothed so that no single
+    /// generation can make the light jump.
+    grid: Grid,
+    grid_next: f64,
+    density: f64,
+    gathering: f64,
+    activity: f64,
 }
 
 /// Seconds for a mood change to settle (the time constant).
 const MOOD_TAU: f64 = 6.0;
+/// Seconds between generations of the hidden Game of Life (about three a second: slow enough to read as drift).
+const GENERATION: f64 = 0.35;
+/// Time constant, in seconds, of the smoothing of the grid's features.
+const FEATURE_TAU: f64 = 1.6;
 
 impl Life {
     pub fn new(seed: u64) -> Life {
         let mut rng = Rng(seed | 1);
         let next_stir = 20.0 + 40.0 * rng.next();
+        let grid = Grid::random(&mut || rng.next(), 0.3);
+        let (density, gathering) = grid.features();
         Life {
             seed,
             rng,
@@ -344,6 +377,11 @@ impl Life {
             pokes: Vec::new(),
             now: Params::EMBER,
             target: Params::EMBER,
+            grid,
+            grid_next: GENERATION,
+            density,
+            gathering,
+            activity: 0.0,
         }
     }
 
@@ -357,6 +395,12 @@ impl Life {
         let recent = self.pokes.iter().filter(|p| t - p.at < 60.0).count();
         let strength = 0.6f64.powi(i32::try_from(recent).unwrap_or(8));
         self.excitement = (self.excitement + 0.6 * strength * self.now.excitability).min(1.0);
+        if self.now.automaton > 0.05 {
+            // the world is touched: a glider is dropped into the hidden grid
+            let rng = &mut self.rng;
+            let (x, y) = ((rng.next() * 10.0) as i32, (rng.next() * 10.0) as i32);
+            self.grid.glider(x, y);
+        }
         self.pokes.push(Poke {
             at: t,
             colour,
@@ -378,11 +422,26 @@ impl Life {
             self.next_stir = t + p.stir_every * (0.4 + 1.2 * self.rng.next());
         }
         let e = self.excitement;
-        // breathing: a wandering period, never faster than 0.5 Hz
+        // the hidden Game of Life: advance it on its own clock, read slow features from it
+        if t - self.grid_next > 5.0 {
+            self.grid_next = t; // do not catch up after a long gap
+        }
+        while t >= self.grid_next {
+            let rng = &mut self.rng;
+            self.grid.step_alive(&mut || rng.next());
+            self.grid_next += GENERATION;
+        }
+        let k = 1.0 - (-dt / FEATURE_TAU).exp();
+        let (density, gathering) = self.grid.features();
+        self.density += (density - self.density) * k;
+        self.gathering += (gathering - self.gathering) * k;
+        self.activity += (self.grid.changed as f64 / 100.0 - self.activity) * k;
+        let a = p.automaton;
+        // breathing: a wandering period, never faster than 0.5 Hz; a busy grid breathes a little quicker
         let wander = 1.0 + 0.25 * noise(self.seed, t / 40.0);
         let period = ((p.breath_period * wander)
             .clamp(p.breath_period * 0.6, p.breath_period * 1.4)
-            / (1.0 + 0.8 * e))
+            / (1.0 + 0.8 * e + 1.5 * a * self.activity))
             .max(2.0);
         self.phase += dt / period;
         let breath = (TAU * self.phase).sin();
@@ -395,9 +454,11 @@ impl Life {
                 mix(p.colour[1], day[1]),
                 mix(p.colour[2], day[2]),
             ],
-            p.sway * noise(self.seed + 6, t / 35.0),
+            p.sway * noise(self.seed + 6, t / 35.0) + a * 70.0 * self.gathering,
         );
-        let base_level = mix(p.level, day_level);
+        // a fuller grid is a little brighter, a sparser one a little dimmer
+        let base_level =
+            mix(p.level, day_level) * (1.0 + a * 1.2 * (self.density - 0.25).clamp(-0.2, 0.3));
         // fire: a small fast component, band-limited to 2.5 Hz so it never becomes a flash
         let fast = noise(self.seed + 4, t * 2.5) * 0.7 + noise(self.seed + 5, t * 1.1) * 0.3;
         let mut level = base_level
