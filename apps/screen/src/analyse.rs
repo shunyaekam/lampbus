@@ -8,12 +8,12 @@
 use lampbus_render::color::{linear_to_srgb, rgb_to_hsv, srgb_to_linear};
 
 /// What to send to the lamp.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Frame {
     /// Hue and saturation at full value.
     pub rgb: [u8; 3],
-    /// Intensity percent.
-    pub level: u8,
+    /// Intensity percent, not rounded: a slow change must not step in whole percents.
+    pub level: f64,
 }
 
 /// How pixels are combined.
@@ -120,8 +120,7 @@ pub fn analyse(img: &Image, p: &Params) -> Option<Frame> {
     // full chroma: scale so the strongest channel is 255 (a black screen has no hue, so it stays white-ish and dim)
     let norm = if peak > 0.0 { 1.0 / peak } else { 1.0 };
     let rgb = enc.map(|c| (c * norm * 255.0).round().clamp(0.0, 255.0) as u8);
-    let level = (f64::from(min_level) + (100.0 - f64::from(min_level)) * lightness.clamp(0.0, 1.0))
-        .round() as u8;
+    let level = f64::from(min_level) + (100.0 - f64::from(min_level)) * lightness.clamp(0.0, 1.0);
     Some(Frame { rgb, level })
 }
 
@@ -176,7 +175,7 @@ mod tests {
         assert_eq!(red.rgb, [255, 0, 0]);
         // Y(red) = 0.2126 -> CIE L* = 53.2 -> 10 + 90 * 0.532 = 57.9
         assert!(
-            (57..=59).contains(&red.level),
+            (57.0..=59.0).contains(&red.level),
             "red is mid-bright: {}",
             red.level
         );
@@ -191,7 +190,7 @@ mod tests {
             10,
         )
         .unwrap();
-        assert_eq!((white.rgb, white.level), ([255, 255, 255], 100));
+        assert_eq!((white.rgb, white.level), ([255, 255, 255], 100.0));
         let black = analyse(
             &solid(64, 36, [0, 0, 0, 255]),
             64,
@@ -203,7 +202,10 @@ mod tests {
             10,
         )
         .unwrap();
-        assert_eq!(black.level, 10, "black sits at the minimum level, not off");
+        assert!(
+            (black.level - 10.0).abs() < 1e-9,
+            "black sits at the minimum level, not off"
+        );
     }
 
     #[test]
@@ -221,7 +223,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(f.rgb, [0, 0, 255]);
-        assert!(f.level < 25, "{}", f.level);
+        assert!(f.level < 25.0, "{}", f.level);
     }
 
     #[test]

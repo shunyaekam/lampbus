@@ -19,6 +19,7 @@ USAGE  lampbus-screen [--to host:port] [--fps N] [--mode mean|vivid] [--min-brig
   --fps N             frames per second, 1-30 (default 10)
   --mode mean|vivid   plain average, or favour colourful pixels (default vivid)
   --min-brightness N  intensity of a black screen, 0-100 (default 8)
+  --creature host:port  tell a running lampbus-life to hold off while this runs (default 127.0.0.1:8790; off disables)
   --once              print one analysis and exit (use this to check permissions)";
 
 struct Opts {
@@ -27,6 +28,7 @@ struct Opts {
     mode: Mode,
     min_level: u8,
     once: bool,
+    creature: Option<String>,
 }
 
 fn parse(args: Vec<String>) -> Result<Option<Opts>, String> {
@@ -36,6 +38,7 @@ fn parse(args: Vec<String>) -> Result<Option<Opts>, String> {
         mode: Mode::Vivid,
         min_level: 8,
         once: false,
+        creature: Some("127.0.0.1:8790".into()),
     };
     let mut it = args.into_iter();
     while let Some(a) = it.next() {
@@ -63,6 +66,10 @@ fn parse(args: Vec<String>) -> Result<Option<Opts>, String> {
                 }
             }
             "--once" => o.once = true,
+            "--creature" => {
+                let v = value("--creature")?;
+                o.creature = (v != "off").then_some(v);
+            }
             other => return Err(format!("unknown option {other:?}; try --help")),
         }
     }
@@ -138,6 +145,7 @@ fn run(o: &Opts) -> Result<(), String> {
     let sock = UdpSocket::bind("0.0.0.0:0").map_err(|e| e.to_string())?;
     let period = Duration::from_secs_f64(1.0 / o.fps);
     let mut last = None;
+    let mut last_hold: Option<Instant> = None;
     loop {
         let started = Instant::now();
         let shot = capture::grab().ok_or("could not capture the display")?;
@@ -161,14 +169,22 @@ fn run(o: &Opts) -> Result<(), String> {
         };
         if o.once {
             println!(
-                "screen {}x{}  ->  rgb({},{},{})  intensity {}%",
+                "screen {}x{}  ->  rgb({},{},{})  intensity {:.1}%",
                 shot.width, shot.height, f.rgb[0], f.rgb[1], f.rgb[2], f.level
             );
             return Ok(());
         }
+        // the creature holds off for a few seconds each time it hears this, and resumes by itself when it stops
+        if let (Some(to), false) = (o.creature.as_deref(), o.once) {
+            if !last_hold.is_some_and(|t| t.elapsed() < Duration::from_secs(1)) {
+                let _ = sock.send_to(b"hold 4", to);
+                last_hold = Some(Instant::now());
+            }
+        }
         if last != Some(f) {
             last = Some(f);
-            sock.send_to(&[f.rgb[0], f.rgb[1], f.rgb[2], f.level], &o.to)
+            let [hi, lo] = ((f.level * 100.0).round().clamp(0.0, 10_000.0) as u16).to_be_bytes();
+            sock.send_to(&[f.rgb[0], f.rgb[1], f.rgb[2], hi, lo], &o.to)
                 .map_err(|e| format!("send to {}: {e}", o.to))?;
         }
         if let Some(rest) = period.checked_sub(started.elapsed()) {

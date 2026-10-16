@@ -24,6 +24,7 @@ STEER (while it runs; works from any shell, script or agent)
   lampbus-life set <name> <number>    breath_period, breath_depth, drift, stir_every, excitability, flicker, sway, automaton, level
   lampbus-life poke [good|info|warn|bad]                      react to something
   lampbus-life sleep | wake                                   stop or resume driving the lamp
+  lampbus-life hold [SECONDS]                                  step aside for a few seconds (a source such as the screen app renews it)
   lampbus-life status
 
   --to host:port      the lampbus UDP input (default 127.0.0.1:8789; enable `udp_stream` in the lampbus config)
@@ -120,6 +121,8 @@ struct State {
     life: Life,
     mood: String,
     asleep: bool,
+    /// Another source (the screen app) is driving the lamp until this time; it stops by itself if the source goes quiet.
+    held_until: f64,
 }
 
 /// Apply one text command. Returns the reply for `status` and for mistakes.
@@ -152,6 +155,11 @@ fn command(state: &mut State, t: f64, line: &str) -> Option<String> {
             } else {
                 Some(format!("error: unknown setting {key:?}"))
             }
+        }
+        ("hold", secs, _) => {
+            let s = secs.and_then(|v| v.parse::<f64>().ok()).unwrap_or(4.0).clamp(0.5, 60.0);
+            state.held_until = t + s;
+            None
         }
         ("sleep", ..) => {
             state.asleep = true;
@@ -210,7 +218,7 @@ fn main() {
     }
     if matches!(
         args.first().map(String::as_str),
-        Some("poke" | "mood" | "set" | "sleep" | "wake" | "status")
+        Some("poke" | "mood" | "set" | "sleep" | "wake" | "hold" | "status")
     ) {
         std::process::exit(send(&args));
     }
@@ -248,6 +256,7 @@ fn main() {
         life: Life::new(o.seed),
         mood: o.mood.clone(),
         asleep: false,
+        held_until: 0.0,
     };
     if let Some(p) = Params::mood(&o.mood) {
         *state.life.target_mut() = p;
@@ -275,7 +284,7 @@ fn main() {
         if o.fine {
             f = f.fine();
         }
-        if !state.asleep {
+        if !state.asleep && t >= state.held_until {
             let _ = out.send_to(&f.wire(), &o.to);
         }
         std::thread::sleep(frame_time);
@@ -291,6 +300,7 @@ mod tests {
             life: Life::new(1),
             mood: "ember".into(),
             asleep: false,
+            held_until: 0.0,
         }
     }
 
@@ -320,6 +330,22 @@ mod tests {
         );
         assert!(command(&mut s, 0.0, "dance").unwrap().starts_with("error"));
         assert_eq!(command(&mut s, 0.0, ""), None);
+    }
+
+    #[test]
+    fn hold_steps_aside_for_a_while_and_is_bounded() {
+        let mut s = state();
+        assert_eq!(command(&mut s, 10.0, "hold 3"), None);
+        assert!((s.held_until - 13.0).abs() < 1e-9);
+        assert_eq!(command(&mut s, 10.0, "hold"), None);
+        assert!((s.held_until - 14.0).abs() < 1e-9, "default four seconds");
+        assert_eq!(command(&mut s, 10.0, "hold 9999"), None);
+        assert!((s.held_until - 70.0).abs() < 1e-9, "capped at a minute");
+        assert_eq!(command(&mut s, 10.0, "hold soon"), None);
+        assert!(
+            (s.held_until - 14.0).abs() < 1e-9,
+            "a bad number means the default, not a stuck lamp"
+        );
     }
 
     #[test]
