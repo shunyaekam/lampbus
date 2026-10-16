@@ -71,6 +71,8 @@ pub(crate) struct Lamp {
     lower_err: bool,
     /// Whether any state command has been given; an untouched lamp is left alone when it connects.
     pub touched: bool,
+    /// Streams are ignored until this time (a person took over).
+    pub yield_until: Ms,
     /// Advertised name this lamp binds to when it has no id yet.
     pub bind_name: Option<String>,
     pub dirty: bool,
@@ -115,6 +117,7 @@ impl Lamp {
             dither: Dither::new(),
             lower_err: false,
             touched: false,
+            yield_until: 0,
             bind_name: None,
             dirty: false,
         }
@@ -189,7 +192,7 @@ impl Lamp {
     }
 
     pub(crate) fn set_stream(&mut self, rgb: Rgb, level: f64, now: Ms, cfg: &Config) {
-        if !self.look.on {
+        if !self.look.on || now < self.yield_until {
             return;
         }
         self.stream = Some(Stream {
@@ -198,6 +201,14 @@ impl Lamp {
             until: now + cfg.stream_timeout_ms,
         });
         self.dirty = true;
+    }
+
+    /// A person gave an explicit colour, effect or animation: a live stream pauses (if configured) so they win.
+    pub(crate) fn yield_to_person(&mut self, now: Ms, cfg: &Config) {
+        if cfg.stream_yield_ms > 0 {
+            self.yield_until = now + cfg.stream_yield_ms;
+            self.stream = None;
+        }
     }
 
     /// See [`Sent::forget_power`]: explicit commands are always sent, whatever the core believes.

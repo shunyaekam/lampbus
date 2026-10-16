@@ -1178,3 +1178,55 @@ fn the_published_snapshot_never_keeps_showing_a_frame_that_has_already_been_writ
         );
     }
 }
+
+#[test]
+fn a_person_wins_over_a_live_stream_until_they_turn_the_lamp_on_again() {
+    let mut s = Sim::with(Config {
+        devices: vec![dev("lamp", "SSL-E089ED", "S1")],
+        stream_yield_ms: 60_000,
+        ..Config::default()
+    });
+    s.all(color([0.0, 0.0, 255.0], Some(100.0)));
+    s.advance(1_000);
+    // a colour from a person pauses streams; turning the lamp on hands it to the stream
+    s.all(Command::Power(Some(true)));
+    let stream = |s: &mut Sim, n: u32| {
+        for i in 0..n {
+            s.all(Command::Stream {
+                rgb: [30.0 + f64::from(i % 7) * 20.0, 0.0, 0.0],
+                brightness: 50.0,
+            });
+            s.advance(50);
+        }
+    };
+    stream(&mut s, 10);
+    assert_eq!(s.core.snapshot(s.now).lamps[0].source, "stream");
+    // a person picks green: the stream must not paint over it
+    s.all(color([0.0, 255.0, 0.0], Some(100.0)));
+    stream(&mut s, 40);
+    let l = s.core.snapshot(s.now).lamps[0].clone();
+    assert_eq!(
+        (l.source, l.rgb),
+        ("color", [0, 255, 0]),
+        "the person's colour holds while a stream keeps arriving"
+    );
+    // turning the lamp on hands the lamp back to the stream
+    s.all(Command::Power(Some(true)));
+    stream(&mut s, 10);
+    assert_eq!(s.core.snapshot(s.now).lamps[0].source, "stream");
+}
+
+#[test]
+fn without_a_yield_a_stream_still_overrides_as_before() {
+    let mut s = Sim::new(vec![dev("lamp", "SSL-E089ED", "S1")]);
+    s.all(color([0.0, 255.0, 0.0], Some(100.0)));
+    s.advance(500);
+    for i in 0..10 {
+        s.all(Command::Stream {
+            rgb: [100.0 + f64::from(i) * 9.0, 0.0, 0.0],
+            brightness: 100.0,
+        });
+        s.advance(50);
+    }
+    assert_eq!(s.core.snapshot(s.now).lamps[0].source, "stream");
+}

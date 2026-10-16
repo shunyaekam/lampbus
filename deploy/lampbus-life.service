@@ -1,0 +1,19 @@
+# systemd user unit: the ambient creature. Installed by `deploy/install.sh --life`; it needs the lampbus service
+# running with "udp_stream" enabled. It takes over the lamp whenever the lamp is on.
+[Unit]
+Description=lampbus ambient creature
+After=lampbus.service
+Wants=lampbus.service
+
+[Service]
+ExecStart=%h/.local/bin/lampbus-life --no-setup
+Environment=PATH=%h/.local/bin:/usr/local/bin:/usr/bin:/bin
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target

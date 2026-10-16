@@ -110,7 +110,7 @@ Needs Rust 1.80+. On Linux you also need `libdbus-1-dev` and `pkg-config` (for B
 | `crates/lampbus-shell` | desktop Bluetooth shell |
 | `definitions/` | lamp definitions + conformance vectors |
 | `library/` | starter animations and presets |
-| `apps/` | `lampbus-matter` (Apple Home, Google Home, Alexa, Home Assistant via Matter), `lampbus-screen` (screen ambient light, macOS), `lampbus-music` (music reactive) |
+| `apps/` | `lampbus-life` (the ambient creature, [docs/LIFE.md](docs/LIFE.md)), `lampbus-matter` (Apple Home, Google Home, Alexa, Home Assistant via Matter), `lampbus-screen` (screen ambient light, macOS), `lampbus-music` (music reactive) |
 | `deploy/` | systemd and launchd units and an installer for an always-on machine |
 | `fuzz/` | cargo-fuzz targets (nightly) |
 | `tools/oracles` | generates the conformance vectors from independent implementations |

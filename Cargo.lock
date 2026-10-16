@@ -1537,6 +1537,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "lampbus-life"
+version = "0.0.1"
+
+[[package]]
 name = "lampbus-matter"
 version = "0.0.1"
 dependencies = [

@@ -69,6 +69,9 @@ pub struct Config {
     pub min_write_interval_ms: Ms,
     /// A live stream is considered over this long after its last frame.
     pub stream_timeout_ms: Ms,
+    /// After a person sends a colour, effect or animation, ignore live streams for this long (0 = never). Turning the
+    /// lamp on ends the pause. Lets an ambient program such as `lampbus-life` coexist with human control.
+    pub stream_yield_ms: Ms,
     /// Give up on a connect after this long.
     pub connect_timeout_ms: Ms,
     /// Stop scanning after this long.
@@ -97,6 +100,7 @@ impl Default for Config {
             idle_ms: 120_000,
             min_write_interval_ms: 25,
             stream_timeout_ms: 2_000,
+            stream_yield_ms: 0,
             connect_timeout_ms: 30_000,
             scan_timeout_ms: 15_000,
             color_gamma: 1.0,
@@ -476,6 +480,13 @@ impl Core {
         if !matches!(cmd, Command::Raw { .. } | Command::Label(_)) {
             lamp.touched = true;
             lamp.forget_for(cmd);
+            match cmd {
+                Command::Color { .. } | Command::Effect { .. } | Command::Play { .. } => {
+                    lamp.yield_to_person(now, &cfg)
+                }
+                Command::Power(Some(true)) => lamp.yield_until = 0, // turning the lamp on wakes the stream again
+                _ => {}
+            }
         }
         let pct = |v: f64| v.clamp(0.0, 100.0);
         let byte = |v: f64| v.round().clamp(0.0, 255.0) as u8;

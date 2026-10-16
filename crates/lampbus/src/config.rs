@@ -20,6 +20,7 @@ struct File {
     devices: Vec<FileDevice>,
     auto_adopt: Option<bool>,
     idle_seconds: Option<f64>,
+    stream_yield_seconds: Option<f64>,
     color_gamma: Option<f64>,
     white_balance: Option<[f64; 3]>,
     level_curve: Option<String>,
@@ -100,6 +101,9 @@ pub fn load(path: Option<&Path>) -> Result<Settings, String> {
     core.auto_adopt = file.auto_adopt.unwrap_or(core.devices.is_empty());
     if let Some(s) = file.idle_seconds {
         core.idle_ms = (s.max(0.0) * 1000.0) as u64;
+    }
+    if let Some(s) = file.stream_yield_seconds {
+        core.stream_yield_ms = (s.max(0.0) * 1000.0) as u64;
     }
     if let Some(g) = file.color_gamma {
         if !(0.1..=5.0).contains(&g) {
