@@ -200,11 +200,27 @@ fn run(o: &Opts) -> Result<(), String> {
     let period = Duration::from_secs_f64(1.0 / o.fps);
     let mut last = None;
     let mut last_sent = Instant::now();
+    let mut failed = 0u32;
     let mut last_hold: Option<Instant> = None;
     loop {
         let started = Instant::now();
-        let shot = capture::grab(o.display)
-            .ok_or_else(|| format!("could not capture display {}", o.display))?;
+        // a capture can fail for a moment (a display waking, a full-screen video starting): skip the frame, and only
+        // give up when it keeps failing
+        let Some(shot) = capture::grab(o.display) else {
+            failed += 1;
+            if failed == 1 {
+                eprintln!(
+                    "lampbus-screen: could not capture display {}; retrying",
+                    o.display
+                );
+            }
+            if failed > 50 {
+                return Err(format!("could not capture display {}", o.display));
+            }
+            std::thread::sleep(period);
+            continue;
+        };
+        failed = 0;
         // BGRA: the byte order macOS display captures use
         let img = Image {
             px: &shot.bytes,
