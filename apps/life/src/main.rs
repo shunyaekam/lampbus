@@ -19,8 +19,8 @@ RUN
                [--fine] [--hour H]
 
 STEER (while it runs; works from any shell, script or agent)
-  lampbus-life mood <ember|campfire|calm|focus|ocean|night>   ease into a mood (about 15 s)
-  lampbus-life set <name> <number>    breath_period, breath_depth, drift, stir_every, excitability, flicker, level
+  lampbus-life mood <ember|campfire|calm|focus|ocean|night|aurora|forest|dusk|sunset|bloom>   ease into a mood (about 15 s)
+  lampbus-life set <name> <number>    breath_period, breath_depth, drift, stir_every, excitability, flicker, sway, level
   lampbus-life poke [good|info|warn|bad]                      react to something
   lampbus-life sleep | wake                                   stop or resume driving the lamp
   lampbus-life status
@@ -136,7 +136,7 @@ fn command(state: &mut State, t: f64, line: &str) -> Option<String> {
                 None
             }
             None => Some(format!(
-                "error: unknown mood {name:?}; try ember campfire calm focus ocean night"
+                "error: unknown mood {name:?}; try ember campfire calm focus ocean night aurora forest dusk sunset bloom"
             )),
         },
         ("set", Some(key), Some(v)) => {

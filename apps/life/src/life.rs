@@ -84,6 +84,8 @@ pub struct Params {
     pub excitability: f64,
     /// Fast small flicker, 0 to 1 (fire).
     pub flicker: f64,
+    /// Degrees the hue slowly wanders either side of the colour (0 to 120): what makes an aurora move through colours.
+    pub sway: f64,
 }
 
 impl Params {
@@ -98,6 +100,7 @@ impl Params {
         stir_every: 90.0,
         excitability: 1.0,
         flicker: 0.0,
+        sway: 0.0,
     };
 
     /// A named mood.
@@ -115,6 +118,7 @@ impl Params {
                 stir_every: 25.0,
                 excitability: 1.3,
                 flicker: 0.7,
+                sway: 8.0,
             },
             "calm" => Params {
                 breath_period: 10.0,
@@ -153,6 +157,57 @@ impl Params {
                 excitability: 0.3,
                 ..e
             },
+            "aurora" => Params {
+                follow_day: 0.0,
+                colour: [20.0, 220.0, 120.0],
+                level: 34.0,
+                breath_period: 11.0,
+                breath_depth: 0.12,
+                drift: 1.0,
+                stir_every: 50.0,
+                sway: 85.0,
+                ..e
+            },
+            "forest" => Params {
+                follow_day: 0.0,
+                colour: [40.0, 190.0, 50.0],
+                level: 30.0,
+                breath_period: 8.0,
+                breath_depth: 0.10,
+                sway: 22.0,
+                stir_every: 70.0,
+                ..e
+            },
+            "dusk" => Params {
+                follow_day: 0.0,
+                colour: [170.0, 60.0, 230.0],
+                level: 28.0,
+                breath_period: 9.0,
+                breath_depth: 0.12,
+                sway: 38.0,
+                stir_every: 80.0,
+                ..e
+            },
+            "sunset" => Params {
+                follow_day: 0.0,
+                colour: [255.0, 95.0, 15.0],
+                level: 34.0,
+                breath_period: 8.0,
+                breath_depth: 0.10,
+                sway: 16.0,
+                stir_every: 100.0,
+                ..e
+            },
+            "bloom" => Params {
+                follow_day: 0.0,
+                colour: [255.0, 55.0, 150.0],
+                level: 30.0,
+                breath_period: 7.0,
+                breath_depth: 0.13,
+                sway: 24.0,
+                stir_every: 60.0,
+                ..e
+            },
             _ => return None,
         })
     }
@@ -167,6 +222,7 @@ impl Params {
             "stir_every" => self.stir_every = v.clamp(5.0, 3600.0),
             "excitability" => self.excitability = v.clamp(0.0, 2.0),
             "flicker" => self.flicker = v.clamp(0.0, 1.0),
+            "sway" => self.sway = v.clamp(0.0, 120.0),
             "follow_day" => self.follow_day = v.clamp(0.0, 1.0),
             _ => return false,
         }
@@ -188,7 +244,39 @@ impl Params {
         m(&mut self.stir_every, to.stir_every);
         m(&mut self.excitability, to.excitability);
         m(&mut self.flicker, to.flicker);
+        m(&mut self.sway, to.sway);
     }
+}
+
+/// Rotate the hue of an RGB colour (0 to 255) by `degrees`, keeping saturation and value.
+fn rotate_hue(rgb: [f64; 3], degrees: f64) -> [f64; 3] {
+    let [r, g, b] = rgb.map(|c| c / 255.0);
+    let (mx, mn) = (r.max(g).max(b), r.min(g).min(b));
+    let d = mx - mn;
+    if d <= 1e-9 || degrees.abs() < 1e-9 {
+        return rgb;
+    }
+    let h = if mx == r {
+        ((g - b) / d).rem_euclid(6.0)
+    } else if mx == g {
+        (b - r) / d + 2.0
+    } else {
+        (r - g) / d + 4.0
+    };
+    let h = (h * 60.0 + degrees).rem_euclid(360.0);
+    let (s, v) = (d / mx, mx);
+    let (c, hp) = (v * s, h / 60.0);
+    let x = c * (1.0 - (hp.rem_euclid(2.0) - 1.0).abs());
+    let (r1, g1, b1) = match hp as u32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let m = v - c;
+    [(r1 + m) * 255.0, (g1 + m) * 255.0, (b1 + m) * 255.0]
 }
 
 struct Rng(u64);
@@ -301,11 +389,14 @@ impl Life {
         let (day, day_level) = baseline(hour);
         let f = p.follow_day.clamp(0.0, 1.0);
         let mix = |a: f64, b: f64| a + (b - a) * f;
-        let base = [
-            mix(p.colour[0], day[0]),
-            mix(p.colour[1], day[1]),
-            mix(p.colour[2], day[2]),
-        ];
+        let base = rotate_hue(
+            [
+                mix(p.colour[0], day[0]),
+                mix(p.colour[1], day[1]),
+                mix(p.colour[2], day[2]),
+            ],
+            p.sway * noise(self.seed + 6, t / 35.0),
+        );
         let base_level = mix(p.level, day_level);
         // fire: a small fast component, band-limited to 2.5 Hz so it never becomes a flash
         let fast = noise(self.seed + 4, t * 2.5) * 0.7 + noise(self.seed + 5, t * 1.1) * 0.3;
@@ -398,7 +489,10 @@ mod tests {
 
     #[test]
     fn it_never_exceeds_the_ceiling_and_never_goes_out_of_range() {
-        for mood in ["ember", "campfire", "calm", "focus", "ocean", "night"] {
+        for mood in [
+            "ember", "campfire", "calm", "focus", "ocean", "night", "aurora", "forest", "dusk",
+            "sunset", "bloom",
+        ] {
             let mut l = Life::new(9);
             *l.target_mut() = Params::mood(mood).unwrap();
             for i in 0..4000 {
@@ -415,7 +509,10 @@ mod tests {
     #[test]
     fn no_mood_modulates_fast_enough_to_flicker() {
         // brightness reversals stay under 3 per second in every mood, even excited
-        for mood in ["ember", "campfire", "calm", "focus", "ocean", "night"] {
+        for mood in [
+            "ember", "campfire", "calm", "focus", "ocean", "night", "aurora", "forest", "dusk",
+            "sunset", "bloom",
+        ] {
             let mut l = Life::new(5);
             *l.target_mut() = Params::mood(mood).unwrap();
             l.now = Params::mood(mood).unwrap();
@@ -507,6 +604,24 @@ mod tests {
         );
         assert!(p.set("breath_period", 0.1) && p.breath_period >= 2.0);
         assert!(!p.set("nonsense", 1.0));
+    }
+
+    #[test]
+    fn hue_rotation_keeps_brightness_and_turns_the_colour() {
+        let red = [255.0, 0.0, 0.0];
+        let g = rotate_hue(red, 120.0);
+        assert!(
+            g[1] > 250.0 && g[0] < 5.0 && g[2] < 5.0,
+            "red turned 120 degrees is green: {g:?}"
+        );
+        assert_eq!(rotate_hue(red, 0.0), red);
+        let grey = [90.0, 90.0, 90.0];
+        assert_eq!(rotate_hue(grey, 77.0), grey, "grey has no hue to turn");
+        let full = rotate_hue([200.0, 100.0, 50.0], 360.0);
+        assert!(
+            (full[0] - 200.0).abs() < 1e-6 && (full[1] - 100.0).abs() < 1e-6,
+            "a full turn is the same colour"
+        );
     }
 
     #[test]
