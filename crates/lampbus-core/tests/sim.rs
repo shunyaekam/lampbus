@@ -1477,3 +1477,68 @@ fn a_stream_switching_between_far_colours_never_passes_through_white() {
         }
     }
 }
+
+// ---- the snapshot follows the streamed light -------------------------------------------------------------------------
+
+#[test]
+fn the_snapshot_shows_the_streamed_light_and_returns_to_the_command_when_it_stops() {
+    let mut s = Sim::new(vec![dev("lamp", "SSL-E089ED", "S1")]);
+    s.all(color([255.0, 255.0, 255.0], Some(100.0)));
+    s.advance(1_000);
+    for _ in 0..30 {
+        s.all(Command::Stream {
+            rgb: [200.0, 40.0, 0.0],
+            brightness: 35.0,
+        });
+        s.advance(50);
+    }
+    let l = s.core.snapshot(s.now).lamps[0].clone();
+    assert_eq!(l.source, "stream");
+    assert_eq!(
+        (l.rgb, l.brightness),
+        ([200, 40, 0], 35),
+        "the snapshot shows what is streamed"
+    );
+    // and when the stream goes quiet it goes back to the last command
+    s.advance(5_000);
+    let l = s.core.snapshot(s.now).lamps[0].clone();
+    assert_eq!(
+        (l.source, l.rgb, l.brightness),
+        ("color", [255, 255, 255], 100)
+    );
+}
+
+#[test]
+fn a_stream_publishes_the_snapshot_about_once_a_second_and_at_once_for_a_big_change() {
+    let mut s = Sim::new(vec![dev("lamp", "SSL-E089ED", "S1")]);
+    s.all(color([255.0, 255.0, 255.0], Some(100.0)));
+    s.advance(1_000);
+    s.core.take_changed();
+    // a slow drift at 20 frames a second for 10 seconds: small steps, so only the one-second refresh publishes
+    let mut published = 0;
+    for i in 0..200 {
+        s.all(Command::Stream {
+            rgb: [100.0 + f64::from(i) * 0.1, 40.0, 0.0],
+            brightness: 30.0,
+        });
+        s.advance(50);
+        if s.core.take_changed() {
+            published += 1;
+        }
+    }
+    assert!(
+        (8..=14).contains(&published),
+        "about once a second, not at the frame rate: {published}"
+    );
+    // a big jump is published at once
+    s.core.take_changed();
+    s.all(Command::Stream {
+        rgb: [0.0, 200.0, 255.0],
+        brightness: 30.0,
+    });
+    assert!(
+        s.core.take_changed(),
+        "a big change is published immediately"
+    );
+    assert_eq!(s.core.snapshot(s.now).lamps[0].rgb, [0, 200, 255]);
+}

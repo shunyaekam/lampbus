@@ -21,7 +21,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-const KEYS: [&str; 13] = [
+const KEYS: [&str; 14] = [
     "device",
     "preset",
     "color",
@@ -35,6 +35,7 @@ const KEYS: [&str; 13] = [
     "power",
     "label",
     "timer",
+    "motor",
 ];
 
 #[derive(Clone)]
@@ -45,6 +46,8 @@ pub struct Ctx {
     pub auto_discover: bool,
     /// Shadow tasks of the lamps' own timers, so what lampbus believes follows what the lamp will do by itself.
     pub timers: Timers,
+    /// Where commands go when an external controller owns the lamp.
+    pub forward: crate::forward::Forward,
 }
 
 /// Running shadow tasks, by target.
@@ -164,6 +167,14 @@ pub fn commands(library: &Library, args: &Value) -> Result<(Target, Vec<Command>
 /// Apply the lamp commands of a control object (no timers: a timer task calls this, and must not recurse into `control`).
 async fn apply(ctx: &Ctx, args: &Value) -> Result<Target, String> {
     let (target, cmds) = commands(&ctx.library, args)?;
+    // the controller's own motor calls are executed; everything else goes to the controller when one owns the lamp
+    let motor = args.get("motor").and_then(Value::as_bool) == Some(true);
+    if !motor && ctx.forward.active() && !cmds.is_empty() {
+        ctx.forward
+            .send(&crate::forward::lines(args, &cmds))
+            .await?;
+        return Ok(target);
+    }
     ctx.ensure_lamps(std::time::Duration::from_secs(12)).await;
     for c in cmds {
         ctx.handle

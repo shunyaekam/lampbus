@@ -33,6 +33,8 @@ struct File {
     udp_stream: Option<String>,
     ddp: Option<String>,
     stream_device: Option<String>,
+    controller: Option<String>,
+    controller_direct: Option<bool>,
     schedules: Vec<FileSchedule>,
 }
 
@@ -58,6 +60,10 @@ pub struct Settings {
     pub ddp: Option<String>,
     /// Lamp that live input drives (default: all).
     pub stream_device: Option<String>,
+    /// UDP address of an external controller that owns the lamp (see `forward.rs`).
+    pub controller: Option<String>,
+    /// Start with the controller bypassed: lampbus executes commands itself.
+    pub controller_direct: bool,
     pub schedules: Vec<crate::schedule::Entry>,
 }
 
@@ -159,6 +165,9 @@ pub fn load(path: Option<&Path>) -> Result<Settings, String> {
         udp_stream: file.udp_stream,
         ddp: file.ddp,
         stream_device: file.stream_device,
+        controller: file.controller,
+        controller_direct: file.controller_direct.unwrap_or(false)
+            || std::env::var("LAMPBUS_DIRECT").is_ok_and(|v| !v.is_empty() && v != "0"),
         schedules,
     })
 }

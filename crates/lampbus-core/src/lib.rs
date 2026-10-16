@@ -466,6 +466,8 @@ impl Core {
             return Err(Error::NoMatchingDevice(t));
         }
         let (mut ok, mut first_err) = (0, None);
+        let streamed = matches!(cmd, Command::Stream { .. });
+        let mut publish = !streamed;
         for i in idx {
             match self.apply(i, now, &cmd) {
                 Ok(()) => ok += 1,
@@ -473,8 +475,14 @@ impl Core {
                     first_err.get_or_insert(e);
                 }
             }
+            if streamed {
+                publish |= self
+                    .lamps
+                    .get_mut(i)
+                    .is_some_and(|l| l.stream_publish_due(now));
+            }
         }
-        self.changed = true;
+        self.changed |= publish;
         self.pump(now);
         match (ok, first_err) {
             (0, Some(e)) => Err(e),
@@ -715,6 +723,7 @@ impl Core {
         let cfg = self.cfg.clone();
         for l in &mut self.lamps {
             self.changed |= l.on_timer(now, &cfg, &mut self.actions);
+            self.changed |= l.stream_ended(now);
         }
         if self.discover_until.is_some_and(|u| now >= u) {
             self.discover_until = None;
@@ -801,8 +810,14 @@ impl Core {
                     known: l.touched,
                     fading: l.fading(),
                     on: l.look.on,
-                    rgb: l.look.rgb,
-                    brightness: l.look.brightness.round() as u8,
+                    rgb: l.published_stream(now).map_or(l.look.rgb, |(rgb, _)| {
+                        rgb.map(|c| c.round().clamp(0.0, 255.0) as u8)
+                    }),
+                    brightness: l
+                        .published_stream(now)
+                        .map_or(l.look.brightness.round() as u8, |(_, level)| {
+                            (level * 100.0).round().clamp(0.0, 100.0) as u8
+                        }),
                     effect: l.look.effect.map(|(m, _)| m),
                     animation: l
                         .look

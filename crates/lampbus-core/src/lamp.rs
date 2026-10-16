@@ -85,6 +85,8 @@ pub(crate) struct Lamp {
     last_activity: Ms,
     backoff_ms: Ms,
     stream: Option<Stream>,
+    /// The streamed light last published in the snapshot: colour, level and when.
+    pub_stream: Option<(Rgb, f64, Ms)>,
     smoother: ColourSmoother,
     last_smooth: Option<Ms>,
     dither: Dither,
@@ -137,6 +139,7 @@ impl Lamp {
             last_activity: 0,
             backoff_ms: 0,
             stream: None,
+            pub_stream: None,
             smoother: ColourSmoother::new(cfg.stream_attack_ms, cfg.stream_release_ms),
             last_smooth: None,
             dither: Dither::new(),
@@ -236,6 +239,39 @@ impl Lamp {
             until: now + cfg.stream_timeout_ms,
         });
         self.dirty = true;
+    }
+
+    /// Whether the streamed light should be published in the snapshot now: when it differs a lot from what was last
+    /// published, or that is a second old. A stream arrives many times a second; the snapshot (which Home apps follow) must
+    /// not change that often, but must not lag far behind either.
+    pub(crate) fn stream_publish_due(&mut self, now: Ms) -> bool {
+        let Some(s) = &self.stream else {
+            return false;
+        };
+        let due = self.pub_stream.map_or(true, |(rgb, level, at)| {
+            let far = rgb.iter().zip(s.rgb).any(|(a, b)| (a - b).abs() > 24.0);
+            now.saturating_sub(at) >= 1_000 || far || (level - s.level).abs() > 0.08
+        });
+        if due {
+            self.pub_stream = Some((s.rgb, s.level, now));
+        }
+        due
+    }
+
+    /// The streamed light as last published, while a stream is live.
+    pub(crate) fn published_stream(&self, now: Ms) -> Option<(Rgb, f64)> {
+        self.pub_stream
+            .filter(|_| self.streaming(now))
+            .map(|(rgb, level, _)| (rgb, level))
+    }
+
+    /// Forget the published stream once it has stopped; returns whether that changed what the snapshot shows.
+    pub(crate) fn stream_ended(&mut self, now: Ms) -> bool {
+        if self.pub_stream.is_some() && !self.streaming(now) {
+            self.pub_stream = None;
+            return true;
+        }
+        false
     }
 
     /// A person gave an explicit colour, effect or animation: a live stream pauses (if configured) so they win.

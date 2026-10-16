@@ -99,6 +99,17 @@ async fn route(app: Arc<App>, req: Request) -> Reply {
             },
             Err(r) => r,
         },
+        ("GET", "/api/direct") => json_reply(200, &app.ctx.forward.status()),
+        ("POST", "/api/direct") => match json_body(&req.body) {
+            Ok(v) => match v.get("on").and_then(Value::as_bool) {
+                Some(on) => {
+                    app.ctx.forward.set_direct(on);
+                    json_reply(200, &app.ctx.forward.status())
+                }
+                None => bad("give {\"on\": true} to control the lamp directly, or {\"on\": false} to hand it to the controller"),
+            },
+            Err(r) => r,
+        },
         ("GET", "/api/library") => json_reply(
             200,
             &json!({"animations": app.ctx.library.all(Kind::Animations), "presets": app.ctx.library.all(Kind::Presets)}),

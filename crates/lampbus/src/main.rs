@@ -5,6 +5,7 @@ mod assets;
 mod cli;
 mod config;
 mod control;
+mod forward;
 #[cfg(feature = "http")]
 mod http;
 mod ingest;
@@ -47,6 +48,7 @@ fn direct(settings: &Settings) -> Result<(Ctx, Vec<lampbus_defs::Definition>), S
         library: Library::new(settings.library_dir.clone()),
         auto_discover: settings.core.auto_adopt,
         timers: Default::default(),
+        forward: forward::Forward::new(settings.controller.clone(), settings.controller_direct),
     };
     Ok((ctx, defs))
 }
@@ -280,6 +282,12 @@ async fn client(g: &Global, settings: &Settings, cmd: Cmd) -> Result<(), String>
             }
             println!("\n{question}");
         }
+        Cmd::Direct(_) => {
+            return Err(
+                "`lampbus direct` needs a running `lampbus serve` (the switch lives in the daemon)"
+                    .into(),
+            );
+        }
         Cmd::Help
         | Cmd::Version
         | Cmd::Definitions
@@ -290,6 +298,22 @@ async fn client(g: &Global, settings: &Settings, cmd: Cmd) -> Result<(), String>
         | Cmd::Air { .. } => {}
     }
     Ok(())
+}
+
+/// One line for `lampbus direct`.
+fn direct_text(v: &Value) -> String {
+    match (
+        v.get("controller").and_then(Value::as_str),
+        v.get("direct").and_then(Value::as_bool),
+    ) {
+        (None, _) => "no controller is configured: lampbus executes every command itself".into(),
+        (Some(c), Some(true)) => {
+            format!("direct: lampbus executes commands itself; the controller at {c} is bypassed")
+        }
+        (Some(c), _) => {
+            format!("forwarding: every command goes to the controller at {c}, which owns the lamp")
+        }
+    }
 }
 
 fn library_text(lib: &Library) -> String {
@@ -357,6 +381,16 @@ async fn confirmed(r: &Remote, limit: Duration) -> Result<(), String> {
 async fn via_remote(g: &Global, r: &Remote, cmd: Cmd) -> Result<(), String> {
     match cmd {
         Cmd::Status | Cmd::Scan => show(&r.call("GET", "/api/state", None).await?, g.json),
+        Cmd::Direct(set) => {
+            let v = match set {
+                Some(on) => {
+                    r.call("POST", "/api/direct", Some(&json!({"on": on})))
+                        .await?
+                }
+                None => r.call("GET", "/api/direct", None).await?,
+            };
+            println!("{}", direct_text(&v));
+        }
         Cmd::Control(args) => {
             let state = r.call("POST", "/api/control", Some(&args)).await?;
             confirmed(r, Duration::from_secs(30)).await?;

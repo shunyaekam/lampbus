@@ -23,6 +23,7 @@ COMMANDS
   save-animation <name> <file>   validate and save an animation spec
   raw <command> [name=value...]  send a protocol command from the lamp's definition
   scan                           find lamps nearby
+  direct [on|off]                with a `controller` configured: `direct on` takes the lamp back from it; `direct off` hands it back; no argument shows which
   gatt [name] [seconds]          read-only look at a Bluetooth device (services, readable values, announcements); no name lists devices
   check <definition.json> [vectors.json]   validate a lamp definition and its test vectors (no Bluetooth needed)
   air <color [brightness]|off|effect <1-12>|line <0-5>>   steer lamps by broadcast, no connection (Linux + BlueZ); --print shows the hex
@@ -79,6 +80,8 @@ pub enum Cmd {
         what: crate::air::What,
     },
     Calibrate(String),
+    /// `lampbus direct [on|off]`: whether lampbus executes commands itself or hands them to the controller.
+    Direct(Option<bool>),
     Definitions,
     Serve,
     Mcp,
@@ -154,6 +157,12 @@ pub fn parse(argv: Vec<String>) -> Result<(Global, Cmd), String> {
         "status" => Cmd::Status,
         "library" => Cmd::Library,
         "scan" => Cmd::Scan,
+        "direct" => Cmd::Direct(match opt(0) {
+            None => None,
+            Some("on") => Some(true),
+            Some("off") => Some(false),
+            Some(_) => return Err("usage: lampbus direct [on|off]".into()),
+        }),
         "gatt" => Cmd::Gatt {
             name: opt(0).map(String::from),
             seconds: match opt(1) {

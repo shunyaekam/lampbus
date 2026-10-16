@@ -32,6 +32,17 @@ $ ./deploy/install.sh path/to/lampbus     # systemd (Linux) or launchd (macOS), 
 }
 ```
 
+### Letting another program own the lamp (optional)
+
+`"controller": "127.0.0.1:8791"` hands the lamp to an external program, such as [living-lamp](https://github.com/shunyaekam/living-lamp).
+Every control command that reaches lampbus (CLI, HTTP, MCP, Matter, schedules) is then sent to that program as a few lines
+of text, and the lamp shows what the program streams back over `udp_stream`. The program answers each message with `ok` or
+`err <why>`, so a controller that is not running is an error the caller sees. Its own calls carry `"motor": true` and are
+executed here. The snapshot (`/api/state`) shows the streamed light, so Home apps stay in step.
+
+`lampbus direct on` (or `LAMPBUS_DIRECT=1`, or `"controller_direct": true`) is the switch for a person: lampbus executes
+commands itself again and the controller is bypassed. `lampbus direct off` hands the lamp back; `lampbus direct` shows which.
+
 ## 4. Reach it from your other devices
 
 Bind to your Tailscale address instead of localhost, for example `"bind": "100.x.y.z:8787"`, then open
