@@ -1,22 +1,16 @@
 //! HTTP + WebSocket API. JSON in and out, bearer-token auth (header or `?token=`).
 //!
 //! `POST /api/control` is the whole command language (see `control.rs`); the rest is reading state and managing
-//! the library. Live sources (screen, music) connect to `/api/stream` and push colours.
+//! the library. Live sources (screen, music) connect to `/api/stream` and push colours. The transport is the small
+//! server in `web.rs`; this file is routing.
 
 use crate::control::{control, Ctx};
 use crate::library::Kind;
-use axum::body::Bytes;
-use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::extract::{Path, Query, Request, State};
-use axum::http::{HeaderMap, StatusCode};
-use axum::middleware::{self, Next};
-use axum::response::{Html, IntoResponse, Response};
-use axum::routing::{get, post, put};
-use axum::{Json, Router};
+use crate::web::{self, Msg, Reply, Request, Response, Ws};
 use lampbus_core::{Command, Target};
 use serde_json::{json, Value};
-use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Duration;
 
 struct App {
     ctx: Ctx,
@@ -24,13 +18,20 @@ struct App {
     definitions: Value,
 }
 
-type Shared = State<Arc<App>>;
-fn fail(code: StatusCode, msg: impl ToString) -> (StatusCode, Json<Value>) {
-    (code, Json(json!({"error": msg.to_string()})))
+fn json_reply(status: u16, v: &Value) -> Reply {
+    Reply::Http(Response {
+        status,
+        content_type: "application/json",
+        body: v.to_string().into_bytes(),
+    })
 }
 
-fn bad(msg: impl ToString) -> (StatusCode, Json<Value>) {
-    fail(StatusCode::BAD_REQUEST, msg)
+fn fail(status: u16, msg: impl ToString) -> Reply {
+    json_reply(status, &json!({"error": msg.to_string()}))
+}
+
+fn bad(msg: impl ToString) -> Reply {
+    fail(400, msg)
 }
 
 fn token_eq(a: &str, b: &str) -> bool {
@@ -41,28 +42,16 @@ fn token_eq(a: &str, b: &str) -> bool {
             == 0
 }
 
-async fn guard(
-    State(app): Shared,
-    headers: HeaderMap,
-    Query(q): Query<HashMap<String, String>>,
-    req: Request,
-    next: Next,
-) -> Response {
-    if req.uri().path().starts_with("/api/") {
-        let given = headers
-            .get("authorization")
-            .and_then(|v| v.to_str().ok())
-            .map(|v| v.strip_prefix("Bearer ").unwrap_or(v))
-            .or_else(|| q.get("token").map(String::as_str))
-            .unwrap_or("");
-        if !token_eq(given, &app.token) {
-            return fail(StatusCode::UNAUTHORIZED, "unauthorized").into_response();
-        }
-    }
-    next.run(req).await
+fn authorised(app: &App, req: &Request) -> bool {
+    let given = req
+        .header("authorization")
+        .map(|v| v.strip_prefix("Bearer ").unwrap_or(v))
+        .or_else(|| req.query("token"))
+        .unwrap_or("");
+    token_eq(given, &app.token)
 }
 
-fn json_body(b: &Bytes) -> Result<Value, (StatusCode, Json<Value>)> {
+fn json_body(b: &[u8]) -> Result<Value, Reply> {
     if b.iter().all(u8::is_ascii_whitespace) {
         return Ok(json!({}));
     }
@@ -83,65 +72,122 @@ pub async fn serve(ctx: Ctx, definitions: Value, addr: &str, token: String) -> s
         token,
         definitions,
     });
-    let router = Router::new()
-        .route("/", get(|| async { Html(include_str!("ui.html")) }))
-        .route("/healthz", get(|| async { Json(json!({"ok": true})) }))
-        .route("/api/state", get(|State(a): Shared, Query(q): Query<HashMap<String, String>>| async move {
-            a.ctx.ensure_lamps(std::time::Duration::from_secs(1)).await;
-            state_body(&a, q.get("wait").and_then(|w| w.parse().ok())).await
-        }))
-        .route("/api/control", post(|State(a): Shared, b: Bytes| async move {
-            control(&a.ctx, &json_body(&b)?).await.map(Json).map_err(bad)
-        }))
-        .route("/api/library", get(|State(a): Shared| async move {
-            Json(json!({"animations": a.ctx.library.all(Kind::Animations), "presets": a.ctx.library.all(Kind::Presets)}))
-        }))
-        .route("/api/definitions", get(|State(a): Shared| async move { Json(a.definitions.clone()) }))
-        .route("/api/{kind}/{name}", put(|State(a): Shared, Path((kind, name)): Path<(String, String)>, b: Bytes| async move {
-            if kind != "animations" && kind != "presets" {
-                return Err(fail(StatusCode::NOT_FOUND, "not found"));
-            }
-            a.ctx.library.save(kind_of(&kind), &name, json_body(&b)?).map(Json).map_err(bad)
-        }).delete(|State(a): Shared, Path((kind, name)): Path<(String, String)>| async move {
-            if kind != "animations" && kind != "presets" {
-                return Err(fail(StatusCode::NOT_FOUND, "not found"));
-            }
-            a.ctx.library.delete(kind_of(&kind), &name).map(|()| Json(json!({"deleted": name}))).map_err(|e| fail(StatusCode::NOT_FOUND, e))
-        }))
-        .route("/api/raw", post(|State(a): Shared, b: Bytes| async move {
-            let d = json_body(&b)?;
-            let command = d.get("command").and_then(Value::as_str).ok_or_else(|| bad("missing \"command\""))?.to_string();
-            let args = d
-                .get("args")
-                .and_then(Value::as_object)
-                .map(|o| o.iter().filter_map(|(k, v)| v.as_f64().map(|n| (k.clone(), n))).collect())
-                .unwrap_or_default();
-            let target = d.get("device").and_then(Value::as_str).map_or(Target::All, |n| Target::Named(n.into()));
-            a.ctx.handle.command(target, Command::Raw { command, args }).await.map_err(bad)?;
-            Ok::<_, (StatusCode, Json<Value>)>(Json(json!({"queued": true})))
-        }))
-        .route("/api/stream", get(|State(a): Shared, Query(q): Query<HashMap<String, String>>, ws: WebSocketUpgrade| async move {
-            let target = q.get("device").map_or(Target::All, |n| Target::Named(n.clone()));
-            ws.on_upgrade(move |s| stream_socket(s, a, target))
-        }))
-        .route("/api/events", get(|State(a): Shared, ws: WebSocketUpgrade| async move { ws.on_upgrade(move |s| events_socket(s, a)) }))
-        .layer(middleware::from_fn_with_state(Arc::clone(&app), guard))
-        .with_state(Arc::clone(&app));
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    axum::serve(listener, router)
-        .with_graceful_shutdown(async {
-            let _ = tokio::signal::ctrl_c().await;
+    web::serve(listener, app, route).await
+}
+
+async fn route(app: Arc<App>, req: Request) -> Reply {
+    let path = req.path.clone();
+    if path.starts_with("/api/") && !authorised(&app, &req) {
+        return fail(401, "unauthorized");
+    }
+    match (req.method.as_str(), path.as_str()) {
+        ("GET", "/") => Reply::Http(Response {
+            status: 200,
+            content_type: "text/html; charset=utf-8",
+            body: include_str!("ui.html").as_bytes().to_vec(),
+        }),
+        ("GET", "/healthz") => json_reply(200, &json!({"ok": true})),
+        ("GET", "/api/state") => {
+            app.ctx.ensure_lamps(Duration::from_secs(1)).await;
+            state_reply(&app, req.query("wait").and_then(|w| w.parse().ok())).await
+        }
+        ("POST", "/api/control") => match json_body(&req.body) {
+            Ok(v) => match control(&app.ctx, &v).await {
+                Ok(state) => json_reply(200, &state),
+                Err(e) => bad(e),
+            },
+            Err(r) => r,
+        },
+        ("GET", "/api/library") => json_reply(
+            200,
+            &json!({"animations": app.ctx.library.all(Kind::Animations), "presets": app.ctx.library.all(Kind::Presets)}),
+        ),
+        ("GET", "/api/definitions") => json_reply(200, &app.definitions),
+        ("POST", "/api/raw") => raw(&app, &req.body).await,
+        ("GET", "/api/stream") => {
+            let target = req
+                .query("device")
+                .map_or(Target::All, |n| Target::Named(n.to_string()));
+            Reply::Upgrade(Box::new(move |ws| Box::pin(stream_socket(ws, app, target))))
+        }
+        ("GET", "/api/events") => {
+            Reply::Upgrade(Box::new(move |ws| Box::pin(events_socket(ws, app))))
+        }
+        (method, p) => library_item(&app, method, p, &req.body),
+    }
+}
+
+/// `PUT` and `DELETE /api/{animations|presets}/{name}`.
+fn library_item(app: &App, method: &str, path: &str, body: &[u8]) -> Reply {
+    let mut parts = path.strip_prefix("/api/").unwrap_or("").split('/');
+    let (Some(kind), Some(name), None) = (parts.next(), parts.next(), parts.next()) else {
+        return fail(404, "not found");
+    };
+    if (kind != "animations" && kind != "presets") || name.is_empty() {
+        return fail(404, "not found");
+    }
+    match method {
+        "PUT" => match json_body(body) {
+            Ok(spec) => match app.ctx.library.save(kind_of(kind), name, spec) {
+                Ok(v) => json_reply(200, &v),
+                Err(e) => bad(e),
+            },
+            Err(r) => r,
+        },
+        "DELETE" => match app.ctx.library.delete(kind_of(kind), name) {
+            Ok(()) => json_reply(200, &json!({"deleted": name})),
+            Err(e) => fail(404, e),
+        },
+        _ => fail(405, "method not allowed"),
+    }
+}
+
+async fn raw(app: &App, body: &[u8]) -> Reply {
+    let d = match json_body(body) {
+        Ok(d) => d,
+        Err(r) => return r,
+    };
+    let Some(command) = d.get("command").and_then(Value::as_str) else {
+        return bad("missing \"command\"");
+    };
+    let args = d
+        .get("args")
+        .and_then(Value::as_object)
+        .map(|o| {
+            o.iter()
+                .filter_map(|(k, v)| v.as_f64().map(|n| (k.clone(), n)))
+                .collect()
         })
+        .unwrap_or_default();
+    let target = d
+        .get("device")
+        .and_then(Value::as_str)
+        .map_or(Target::All, |n| Target::Named(n.into()));
+    match app
+        .ctx
+        .handle
+        .command(
+            target,
+            Command::Raw {
+                command: command.to_string(),
+                args,
+            },
+        )
         .await
+    {
+        Ok(_) => json_reply(200, &json!({"queued": true})),
+        Err(e) => bad(e),
+    }
 }
 
 /// Live sources push frames: binary `r g b [brightness]` or text `{"rgb":[r,g,b],"brightness":n}`.
-async fn stream_socket(mut ws: WebSocket, app: Arc<App>, target: Target) {
-    while let Some(Ok(msg)) = ws.recv().await {
+async fn stream_socket(mut ws: Ws, app: Arc<App>, target: Target) {
+    while let Some(msg) = ws.recv().await {
         match msg {
-            Message::Binary(b) => {
+            Msg::Binary(b) => {
                 // r g b [brightness]
-                if let [r, g, bl, rest @ ..] = b.as_ref() {
+                if let [r, g, bl, rest @ ..] = b.as_slice() {
                     let brightness = rest.first().map_or(100.0, |v| f64::from(*v));
                     app.ctx.handle.stream(
                         target.clone(),
@@ -150,7 +196,7 @@ async fn stream_socket(mut ws: WebSocket, app: Arc<App>, target: Target) {
                     );
                 }
             }
-            Message::Text(t) => {
+            Msg::Text(t) => {
                 let parsed = serde_json::from_str::<Value>(&t).ok().and_then(|d| {
                     let c = d.get("rgb")?.as_array()?;
                     Some((
@@ -166,31 +212,35 @@ async fn stream_socket(mut ws: WebSocket, app: Arc<App>, target: Target) {
                     Some((rgb, bri)) => app.ctx.handle.stream(target.clone(), rgb, bri),
                     None => {
                         let _ = ws
-                            .send(Message::Text(
-                                r#"{"error":"expected {\"rgb\":[r,g,b],\"brightness\":0-100}"}"#
-                                    .into(),
-                            ))
+                            .send_text(
+                                r#"{"error":"expected {\"rgb\":[r,g,b],\"brightness\":0-100}"}"#,
+                            )
                             .await;
                     }
                 }
             }
-            Message::Close(_) => break,
-            _ => {}
+            Msg::Ping(p) => {
+                let _ = ws.pong(&p).await;
+            }
         }
     }
 }
 
 /// Pushes the state snapshot whenever it changes.
-async fn events_socket(mut ws: WebSocket, app: Arc<App>) {
+async fn events_socket(mut ws: Ws, app: Arc<App>) {
     let mut rx = app.ctx.handle.subscribe();
     loop {
         let snapshot = serde_json::to_string(&*rx.borrow_and_update()).unwrap_or_default();
-        if ws.send(Message::Text(snapshot.into())).await.is_err() {
+        if ws.send_text(&snapshot).await.is_err() {
             return;
         }
         tokio::select! {
             r = rx.changed() => if r.is_err() { return },
-            m = ws.recv() => if !matches!(m, Some(Ok(_))) { return },
+            m = ws.recv() => match m {
+                Some(Msg::Ping(p)) => { let _ = ws.pong(&p).await; }
+                Some(_) => {}
+                None => return,
+            },
         }
     }
 }
@@ -204,24 +254,25 @@ pub fn body_hash(b: &[u8]) -> u64 {
 
 /// The state snapshot. With `wait=<hash of the last body the caller saw>` it holds the request until the state
 /// differs from that (or 50 s pass), so a client can follow the lamp without polling.
-async fn state_body(a: &App, wait: Option<u64>) -> Result<Response, (StatusCode, Json<Value>)> {
+async fn state_reply(a: &App, wait: Option<u64>) -> Reply {
     let mut rx = a.ctx.handle.subscribe();
-    let deadline = tokio::time::Instant::now() + std::time::Duration::from_secs(50);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(50);
     loop {
-        let body = serde_json::to_value(&*rx.borrow_and_update())
-            .map_err(bad)?
-            .to_string();
+        let body = match serde_json::to_value(&*rx.borrow_and_update()) {
+            Ok(v) => v.to_string(),
+            Err(e) => return bad(e),
+        };
         let changed = wait != Some(body_hash(body.as_bytes()));
         if changed
             || tokio::time::timeout_at(deadline, rx.changed())
                 .await
                 .is_err()
         {
-            return Ok((
-                [(axum::http::header::CONTENT_TYPE, "application/json")],
-                body,
-            )
-                .into_response());
+            return Reply::Http(Response {
+                status: 200,
+                content_type: "application/json",
+                body: body.into_bytes(),
+            });
         }
     }
 }

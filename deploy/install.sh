@@ -78,7 +78,13 @@ case "$(uname -s)" in
       if [ "$DRY" = 1 ]; then echo "+ install $plist into ~/Library/LaunchAgents (with __HOME__ replaced)"; else
         sed "s|__HOME__|$HOME|g" "$HERE/$plist" > "$HOME/Library/LaunchAgents/$plist"
         launchctl bootout "gui/$(id -u)/${plist%.plist}" 2>/dev/null || true
-        launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/$plist"
+        # bootout returns before the old service has gone; bootstrap then fails with "Input/output error". Wait for it.
+        for try in 1 2 3 4 5; do
+          launchctl print "gui/$(id -u)/${plist%.plist}" >/dev/null 2>&1 || break
+          sleep 1
+        done
+        launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/$plist" || {
+          sleep 2; launchctl bootstrap "gui/$(id -u)" "$HOME/Library/LaunchAgents/$plist"; }
       fi
     done
     echo "logs:    tail -f ~/Library/Logs/lampbus.log" ;;

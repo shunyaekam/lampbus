@@ -13,6 +13,8 @@ mod library;
 mod mcp;
 mod remote;
 mod schedule;
+#[cfg(feature = "http")]
+mod web;
 
 use cli::{Cmd, Global};
 use config::Settings;
