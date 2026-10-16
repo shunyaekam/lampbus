@@ -33,9 +33,15 @@ The twelve effects: Fade7, Fade3, Breath R, Strobe R, Breath7, Breath3, Breath B
   (`[random, product0..2, 0xC3, frame, mode, r|light, g|speed, b, group, fftStatus, light|sensitivity, random×3]`;
   `0xC5` is the timer, another code the line order), encoded by a native library. Groups matter there. Not reproduced:
   macOS cannot advertise arbitrary data, so it needs Linux/BlueZ or a phone.
-- **State read-back.** There is none. The lamp answers only command 1. After its own timer fires, or after the vendor
-  app changes it, nothing tells us. lampbus therefore sends every explicit command in full (DECISIONS D22) and
-  mirrors the timers it programmed itself (D23).
+- **State read-back, connected: none.** Over the connection the lamp answers only command 1. After its own timer
+  fires, or after the vendor app changes it, nothing tells us. lampbus therefore sends every explicit command in
+  full (DECISIONS D22) and mirrors the timers it programmed itself (D23).
+- **State read-back, broadcast: it exists, and is not reproduced.** The app decodes advertisements that lamps send
+  back (manufacturer data, 16 bytes after a native cipher `WirelessEncoder.cipher`, bytes 1-3 = product `54 00 1d`,
+  13-15 = the app's random code): byte 0 mode, 5 brightness, 6-8 device id (or the line order in a line-order
+  reply), 9 and 12 vendor ids, 10 group, 11 bit 0 = on. The idle advertisement is a different, shorter packet
+  (`5254: 00 57 00 00 53`, service `af30`), identical for red and for dim blue (2026-10-15), so it carries no
+  state. Reproducing the cipher, and a radio that can advertise freely, would give the lamp an observable state.
 - **The LED hardware.** Three channels. No white LEDs. A coating on this lamp tints white purple, which
   `white_balance` cancels in the colour pipeline.
 - **`Agreement.getEnterDiyCommand`** (`06 'S' 'M' 'V' 'E' 'W' 01…`) exists in the app and is never called.
